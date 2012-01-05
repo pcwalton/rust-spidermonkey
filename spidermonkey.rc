@@ -1,0 +1,9 @@
+/* Rust bindings to the SpiderMonkey JavaScript engine. */
+
+#[link(name="spidermonkey",
+       vers="0.1",
+       uuid="fbf794e2-131a-462a-973b-1a822922fad5")];
+#[crate_type="lib"];
+
+mod js;
+
