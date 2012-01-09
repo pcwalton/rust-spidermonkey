@@ -1,43 +1,84 @@
-typedef void (*JSPropertyOp)();
-typedef void (*JSStrictPropertyOp)();
-typedef void (*JSEnumerateOp)();
-typedef void (*JSResolveOp)();
-typedef void (*JSConvertOp)();
-typedef void (*JSFinalizeOp)();
+#include <js/jsapi.h>
+#include <cstdlib>
 
-extern "C" void JS_PropertyStub();
-extern "C" void JS_StrictPropertyStub();
-extern "C" void JS_EnumerateStub();
-extern "C" void JS_ResolveStub();
-extern "C" void JS_ConvertStub();
-extern "C" void JS_FinalizeStub();
+/*
+ * Rust API declarations.
+ *
+ * TODO: Rust should expose a nice header file for this kind of thing.
+ */
 
-extern "C" {
+struct rust_port;
 
-JSPropertyOp JSRust_GetPropertyStub() {
+extern "C" rust_port *new_port(size_t unit_sz);
+extern "C" void del_port(rust_port *port);
+
+/* SpiderMonkey helpers, needed since Rust doesn't support C++ global variables. */
+
+extern "C" JSPropertyOp JSRust_GetPropertyStub() {
     return JS_PropertyStub;
 }
 
-JSStrictPropertyOp JSRust_GetStrictPropertyStub() {
+extern "C" JSStrictPropertyOp JSRust_GetStrictPropertyStub() {
     return JS_StrictPropertyStub;
 }
 
-JSEnumerateOp JSRust_GetEnumerateStub() {
+extern "C" JSEnumerateOp JSRust_GetEnumerateStub() {
     return JS_EnumerateStub;
 }
 
-JSResolveOp JSRust_GetResolveStub() {
+extern "C" JSResolveOp JSRust_GetResolveStub() {
     return JS_ResolveStub;
 }
 
-JSConvertOp JSRust_GetConvertStub() {
+extern "C" JSConvertOp JSRust_GetConvertStub() {
     return JS_ConvertStub;
 }
 
-JSFinalizeOp JSRust_GetFinalizeStub() {
+extern "C" JSFinalizeOp JSRust_GetFinalizeStub() {
     return JS_FinalizeStub;
 }
 
+/* Port and channel constructors */
+
+namespace {
+
+void port_finalize(JSContext *cx, JSObject *obj) {
+    /*rust_port *port = reinterpret_cast<rust_port *>(JS_GetPrivate(cx, obj));
+    if (port)
+        del_port(port);*/
 }
 
+JSClass port_class = {
+    "Port",                         /* name */
+    JSCLASS_HAS_PRIVATE,            /* flags */
+    JS_PropertyStub,                /* addProperty */
+    JS_PropertyStub,                /* delProperty */
+    JS_PropertyStub,                /* getProperty */
+    JS_StrictPropertyStub,          /* setProperty */
+    JS_EnumerateStub,               /* enumerate */
+    JS_ResolveStub,                 /* resolve */
+    JS_ConvertStub,                 /* convert */
+    JS_FinalizeStub,                  /* finalize */
+    JSCLASS_NO_OPTIONAL_MEMBERS
+};
+
+JSBool jsrust_new_port(JSContext *cx, uintN argc, jsval *vp) {
+    JSObject *obj = JS_THIS_OBJECT(cx, vp);
+    if (!obj) {
+        JS_ReportError(cx, "|this| is not an object");
+        return JS_FALSE;
+    }
+
+    rust_port *port = new_port(sizeof(void *) * 2);
+    JS_SetPrivate(cx, obj, port);
+    JS_SET_RVAL(cx, vp, JS_THIS(cx, vp));
+    return JS_TRUE;
+}
+
+}   /* end anonymous namespace */
+
+extern "C" JSBool JSRust_InitRustLibrary(JSContext *cx, JSObject *obj) {
+    JSFunction *fn = JS_DefineFunction(cx, obj, "Port", jsrust_new_port, 0, 0);
+    return !!fn;
+}
 

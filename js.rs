@@ -7,7 +7,7 @@ import ptr::null;
 export new_runtime, new_context, set_options, set_version, new_class;
 export new_compartment_and_global_object, init_standard_classes, options;
 export null_principals, compile_script, execute_script, value_to_source;
-export get_string_bytes, get_string;
+export get_string_bytes, get_string, ext;
 
 /* Structures. */
 type JSClass = {
@@ -241,6 +241,8 @@ native mod js {
                            dst : *u8, dstlenp : *size_t) -> bool;
 
     /* TODO: Plenty more to add here. */
+
+	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
 }
 
 #[link_args="-L."]
@@ -428,5 +430,12 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
     }
 
     ret str::unsafe_from_bytes(buf);
+}
+
+/** Rust extensions to the JavaScript language bindings. */
+mod ext {
+	fn init_rust_library(cx : context, object : object) {
+		if !js::JSRust_InitRustLibrary(*cx, *object) { fail; }
+	}
 }
 

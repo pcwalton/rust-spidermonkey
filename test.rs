@@ -13,8 +13,9 @@ fn main() {
                                                        js::null_principals());
 
     js::init_standard_classes(cx, global);
+	js::ext::init_rust_library(cx, global);
 
-    let src = "\"Hello \" + \"world!\"";
+    let src = "Port()";
     let script = js::compile_script(cx, global, str::bytes(src), "test.js",
                                     0u);
     let result = option::get(js::execute_script(cx, global, script));
