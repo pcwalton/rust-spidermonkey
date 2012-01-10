@@ -2,6 +2,7 @@ LIB=lib
 DYLIB=dylib
 RUSTC?=rustc
 CXX=g++
+CXXFLAGS=-g
 LDFLAGS_DYNAMICLIB=-dynamiclib
 LIBS=-lmozjs -lrustrt
 VERSION=0.1
@@ -14,7 +15,7 @@ $(LIB)spidermonkey-$(VERSION).$(DYLIB):	spidermonkey.rc js.rs $(LIB)spidermonkey
 	$(RUSTC) -o $@ --lib $<
 
 $(LIB)spidermonkeyrustext.$(DYLIB):	spidermonkeyrustext.cpp
-	$(CXX) -o $@ $(LDFLAGS_DYNAMICLIB) $(LDFLAGS) $(LIBS) -o $@ $<
+	$(CXX) $(CXXFLAGS) -o $@ $(LDFLAGS_DYNAMICLIB) $(LDFLAGS) $(LIBS) -o $@ $<
 
 test:	test.rs $(LIB)spidermonkey-$(VERSION).$(DYLIB)
 	$(RUSTC) -o $@ -L . $<
@@ -22,5 +23,5 @@ test:	test.rs $(LIB)spidermonkey-$(VERSION).$(DYLIB)
 .PHONY:	clean
 
 clean:
-	rm -f $(LIB)spidermonkey-$(VERSION).$(DYLIB) $(LIB)spidermonkeyrustext.$(DYLIB)
+	rm -f $(LIB)spidermonkey-$(VERSION).$(DYLIB) $(LIB)spidermonkeyrustext.$(DYLIB) test
 

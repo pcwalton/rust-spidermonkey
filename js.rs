@@ -1,6 +1,7 @@
 /* Rust bindings to the SpiderMonkey JavaScript engine. */
 
 use std;
+import comm::chan;
 import ctypes::{ size_t, void };
 import ptr::null;
 
@@ -39,6 +40,13 @@ type JSClass = {
                void, void, void, void, void, void, void, void,  /* 24 */
                void, void, void, void, void, void, void, void,  /* 32 */
                void, void, void, void, void, void, void, void)  /* 40 */
+};
+
+type error_report = {
+	message: str,
+	filename: str,
+	lineno: uint,
+	flags: uint
 };
 
 /* Opaque types. */
@@ -125,8 +133,6 @@ native mod js {
     fn JS_Unlock(rt : *JSRuntime);
     // fn JS_SetContextCallback(rt : *JSRuntime,
     //                                 cxCallback : JSContextCallback);
-    fn JS_NewContext(rt : *JSRuntime, stackChunkSize : size_t)
-        -> *JSContext;
     fn JS_DestroyContext(cx : *JSContext);
     fn JS_DestroyContextNoGC(cx : *JSContext);
     fn JS_DestroyContextMaybeGC(cx : *JSContext);
@@ -242,7 +248,6 @@ native mod js {
 
     /* TODO: Plenty more to add here. */
 
-	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
 }
 
 #[link_args="-L."]
@@ -255,6 +260,13 @@ native mod jsrust {
     fn JSRust_GetResolveStub() -> JSResolveOp;
     fn JSRust_GetConvertStub() -> JSConvertOp;
     fn JSRust_GetFinalizeStub() -> JSFinalizeOp;
+
+	/* Additional features. */
+    fn JSRust_NewContext(rt : *JSRuntime, stackChunkSize : size_t)
+        -> *JSContext;
+	fn JSRust_SetErrorChannel(cx : *JSContext, chan : chan<error_report>)
+		-> bool;
+	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
 }
 
 resource runtime(rt : *JSRuntime) {
@@ -282,7 +294,7 @@ fn shut_down() {
 /* Contexts */
 
 fn new_context(rt : runtime, stack_chunk_size : size_t) -> context {
-    ret context(js::JS_NewContext(*rt, stack_chunk_size));
+    ret context(jsrust::JSRust_NewContext(*rt, stack_chunk_size));
 }
 
 /* Options */
@@ -434,8 +446,12 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
 
 /** Rust extensions to the JavaScript language bindings. */
 mod ext {
+	fn set_error_channel(cx : context, chan : chan<error_report>) {
+		if !jsrust::JSRust_SetErrorChannel(*cx, chan) { fail; }
+	}
+
 	fn init_rust_library(cx : context, object : object) {
-		if !js::JSRust_InitRustLibrary(*cx, *object) { fail; }
+		if !jsrust::JSRust_InitRustLibrary(*cx, *object) { fail; }
 	}
 }
 
