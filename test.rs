@@ -19,7 +19,7 @@ fn main() {
     js::init_standard_classes(cx, global);
 	js::ext::init_rust_library(cx, global);
 
-    let src = "foo()";
+    let src = "throw new Error(new Port().channel());";
     let script = js::compile_script(cx, global, str::bytes(src), "test.js",
                                     0u);
     let result_opt = js::execute_script(cx, global, script);

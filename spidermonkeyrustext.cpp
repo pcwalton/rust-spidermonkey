@@ -120,22 +120,37 @@ JSClass port_class = {
     JS_EnumerateStub,               /* enumerate */
     JS_ResolveStub,                 /* resolve */
     JS_ConvertStub,                 /* convert */
-    JS_FinalizeStub,                  /* finalize */
+    port_finalize,                  /* finalize */
     JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 JSBool jsrust_new_port(JSContext *cx, uintN argc, jsval *vp) {
-    JSObject *obj = JS_THIS_OBJECT(cx, vp);
+    jsval constructor = JS_THIS(cx, vp);
+    JSObject *obj = JS_NewObject(
+        cx, &port_class, NULL, JSVAL_TO_OBJECT(constructor));
+
     if (!obj) {
-        JS_ReportError(cx, "|this| is not an object");
+        JS_ReportError(cx, "Could not create Port");
         return JS_FALSE;
     }
 
     rust_port *port = new_port(sizeof(void *) * 2);
     JS_SetPrivate(cx, obj, port);
-    JS_SET_RVAL(cx, vp, JS_THIS(cx, vp));
+    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(obj));
     return JS_TRUE;
 }
+
+JSBool jsrust_port_channel(JSContext *cx, uintN argc, jsval *vp) {
+    jsval self = JS_THIS(cx, vp);
+    rust_port *port = (rust_port *)JS_GetPrivate(cx, JSVAL_TO_OBJECT(self));
+    // todo make channel and return it
+    JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+static JSFunctionSpec port_functions[] = {
+    JS_FN("channel", jsrust_port_channel, 0, 0),
+    JS_FS_END
+};
 
 void jsrust_report_error(JSContext *cx, const char *c_message,
                          JSErrorReport *c_report)
@@ -166,10 +181,17 @@ extern "C" JSContext *JSRust_NewContext(JSRuntime *rt, size_t size) {
     return cx;
 }
 
-extern "C" JSBool JSRust_InitRustLibrary(JSContext *cx, JSObject *obj) {
-    JSFunction *fn = JS_DefineFunction(cx, obj, "Port", jsrust_new_port, 0,
-                                       0);
-    return !!fn;
+extern "C" JSBool JSRust_InitRustLibrary(JSContext *cx, JSObject *global) {
+    JSObject *result = JS_InitClass(
+        cx, global, NULL,
+        &port_class,
+        jsrust_new_port,
+        0, // 0 args
+        NULL, // no properties
+        port_functions, // no functions
+        NULL, NULL);
+
+    return !!result;
 }
 
 extern "C" JSBool JSRust_SetErrorChannel(JSContext *cx,
