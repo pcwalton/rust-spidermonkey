@@ -94,6 +94,9 @@ struct jsrust_context_priv {
     const type_desc *error_tydesc;
     rust_chan_pkg error_chan;
 
+    const type_desc *log_tydesc;
+    rust_chan_pkg log_chan;
+
     jsrust_context_priv() : error_tydesc(NULL), error_chan() {}
 };
 
@@ -102,6 +105,11 @@ struct jsrust_error_report {
     rust_str *filename;
     uintptr_t lineno;
     uintptr_t flags;
+};
+
+struct jsrust_log_message {
+    rust_str *message;
+    uintptr_t level;
 };
 
 void port_finalize(JSContext *cx, JSObject *obj) {
@@ -147,6 +155,7 @@ JSBool jsrust_port_channel(JSContext *cx, uintN argc, jsval *vp) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     return JS_TRUE;
 }
+
 static JSFunctionSpec port_functions[] = {
     JS_FN("channel", jsrust_port_channel, 0, 0),
     JS_FS_END
@@ -206,6 +215,51 @@ extern "C" JSBool JSRust_SetErrorChannel(JSContext *cx,
     priv->error_chan = *channel;
 
     JS_SetErrorReporter(cx, jsrust_report_error);
+    return JS_TRUE;
+}
+
+JSBool JSRustPostMessage(JSContext *cx, uintN argc, jsval *vp) {
+    void *priv_p = JS_GetContextPrivate(cx);
+    assert(priv_p && "No private data associated with context!");
+    jsrust_context_priv *priv =
+        reinterpret_cast<jsrust_context_priv *>(priv_p);
+
+    JSString * msg;
+    JS_ConvertArguments(cx,
+        1, JS_ARGV(cx, vp), "S", &msg);
+
+    const char *code = JS_EncodeString(cx, msg);
+    rust_str *message = rust_str::make(code);
+
+    jsrust_log_message report =
+        { message, 0 };
+
+    chan_id_send(priv->log_tydesc, priv->log_chan.task,
+                 priv->log_chan.port, &report);
+
+    JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+
+static JSFunctionSpec postMessage_functions[] = {
+    JS_FN("postMessage", JSRustPostMessage, 0, 0),
+    JS_FS_END
+};
+
+extern "C" JSBool JSRust_SetLogChannel(JSContext *cx,
+                                         JSObject *global,
+                                         const rust_chan_pkg *channel,
+                                         const type_desc *tydesc) {
+    void *priv_p = JS_GetContextPrivate(cx);
+    assert(priv_p && "No private data associated with context!");
+    jsrust_context_priv *priv =
+        reinterpret_cast<jsrust_context_priv *>(priv_p);
+
+    priv->log_tydesc = tydesc;
+    priv->log_chan = *channel;
+
+    JS_DefineFunctions(cx, global, postMessage_functions);
+
     return JS_TRUE;
 }
 

@@ -17,14 +17,21 @@ fn main() {
                                                        js::null_principals());
 
     js::init_standard_classes(cx, global);
+
+    let log_port = port();
+    js::ext::set_log_channel(cx, global, chan(log_port));
+
 	js::ext::init_rust_library(cx, global);
 
-    let src = "throw new Error(new Port().channel());";
+    let src = "postMessage('hi there'); throw new Error('hello. errors work.')";
     let script = js::compile_script(cx, global, str::bytes(src), "test.js",
                                     0u);
-    let result_opt = js::execute_script(cx, global, script);
+    js::execute_script(cx, global, script);
 
-	let err = recv(err_port);
+    let msg = recv(log_port);
+    log(core::error, msg.message);
+
+    let err = recv(err_port);
 	log(core::error, err);
 
     /*let result_src = js::value_to_source(cx, result);

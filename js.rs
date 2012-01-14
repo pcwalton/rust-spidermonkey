@@ -49,6 +49,11 @@ type error_report = {
 	flags: uint
 };
 
+type log_message = {
+	message: str,
+	level: uint,
+};
+
 /* Opaque types. */
 type jsval = u64;
 tag jsid { jsid_priv(uint); }
@@ -266,6 +271,8 @@ native mod jsrust {
         -> *JSContext;
 	fn JSRust_SetErrorChannel(cx : *JSContext, chan : chan<error_report>)
 		-> bool;
+	fn JSRust_SetLogChannel(cx : *JSContext, object : *JSObject, chan : chan<log_message>)
+		-> bool;
 	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
 }
 
@@ -448,6 +455,10 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
 mod ext {
 	fn set_error_channel(cx : context, chan : chan<error_report>) {
 		if !jsrust::JSRust_SetErrorChannel(*cx, chan) { fail; }
+	}
+
+	fn set_log_channel(cx : context, object : object, chan : chan<log_message>) {
+		if !jsrust::JSRust_SetLogChannel(*cx, *object, chan) { fail; }
 	}
 
 	fn init_rust_library(cx : context, object : object) {
