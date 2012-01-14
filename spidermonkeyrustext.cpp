@@ -113,9 +113,9 @@ struct jsrust_log_message {
 };
 
 void port_finalize(JSContext *cx, JSObject *obj) {
-    /*rust_port *port = reinterpret_cast<rust_port *>(JS_GetPrivate(cx, obj));
+    rust_port *port = reinterpret_cast<rust_port *>(JS_GetPrivate(cx, obj));
     if (port)
-        del_port(port);*/
+        del_port(port);
 }
 
 JSClass port_class = {
@@ -176,6 +176,13 @@ void jsrust_report_error(JSContext *cx, const char *c_message,
 
     chan_id_send(priv->error_tydesc, priv->error_chan.task,
                  priv->error_chan.port, &report);
+
+    jsrust_log_message log_report =
+        { message, 1 };
+
+    chan_id_send(priv->log_tydesc, priv->log_chan.task,
+                 priv->log_chan.port, &log_report);
+
 }
 
 }   /* end anonymous namespace */
@@ -241,8 +248,8 @@ JSBool JSRustPostMessage(JSContext *cx, uintN argc, jsval *vp) {
     return JS_TRUE;
 }
 
-static JSFunctionSpec postMessage_functions[] = {
-    JS_FN("postMessage", JSRustPostMessage, 0, 0),
+static JSFunctionSpec print_functions[] = {
+    JS_FN("print", JSRustPostMessage, 0, 0),
     JS_FS_END
 };
 
@@ -258,7 +265,7 @@ extern "C" JSBool JSRust_SetLogChannel(JSContext *cx,
     priv->log_tydesc = tydesc;
     priv->log_chan = *channel;
 
-    JS_DefineFunctions(cx, global, postMessage_functions);
+    JS_DefineFunctions(cx, global, print_functions);
 
     return JS_TRUE;
 }
