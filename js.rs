@@ -266,13 +266,6 @@ native mod jsrust {
     fn JSRust_GetConvertStub() -> JSConvertOp;
     fn JSRust_GetFinalizeStub() -> JSFinalizeOp;
 
-    fn JSRust_GetNullJSClassInternal() -> JSClassInternal;
-    fn JSRust_GetNullJSCheckAccessOp() -> JSCheckAccessOp;
-    fn JSRust_GetNullJSNative() -> JSNative;
-    fn JSRust_GetNullJSXDRObjectOp() -> JSXDRObjectOp;
-    fn JSRust_GetNullJSHasInstanceOp() -> JSHasInstanceOp;
-    fn JSRust_GetNullJSTraceOp() -> JSTraceOp;
-
 	/* Additional features. */
     fn JSRust_NewContext(rt : *JSRuntime, stackChunkSize : size_t)
         -> *JSContext;
