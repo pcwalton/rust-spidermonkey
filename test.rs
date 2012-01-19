@@ -9,7 +9,7 @@ fn main() {
     let rt = js::new_runtime(8u32 * 1024u32 * 1024u32);
     let cx = js::new_context(rt, 8192 as size_t);
     js::set_options(cx, js::options::varobjfix | js::options::methodjit);
-    //js::set_version(cx, 185u);
+    js::set_version(cx, 185u);
 
 	let err_port = port();
 	js::ext::set_error_channel(cx, chan(err_port));
