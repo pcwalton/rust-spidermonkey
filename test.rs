@@ -11,8 +11,8 @@ fn main() {
     js::set_options(cx, js::options::varobjfix | js::options::methodjit);
     js::set_version(cx, 185u);
 
-	let err_port = port();
-	js::ext::set_error_channel(cx, chan(err_port));
+    let err_port = port();
+    js::ext::set_error_channel(cx, chan(err_port));
 
     let class = js::new_class({ name: "global", flags: 0x47700u32 });
     let global = js::new_compartment_and_global_object(cx, class,
@@ -23,7 +23,7 @@ fn main() {
     let log_port = port();
     js::ext::set_log_channel(cx, global, chan(log_port));
 
-	js::ext::init_rust_library(cx, global);
+    js::ext::init_rust_library(cx, global);
 
     alt std::io::read_whole_file("test.js") {
         result::ok(file) {
