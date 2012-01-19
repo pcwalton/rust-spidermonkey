@@ -349,6 +349,7 @@ type class = {
 fn new_class(spec : class_spec) -> @class unsafe {
     // Root the name separately, and make the JSClass name point into it.
     let name = @spec.name;
+    let x : *void = ptr::null();
     ret @{
         name: name,
         jsclass: {
@@ -373,9 +374,10 @@ fn new_class(spec : class_spec) -> @class unsafe {
             trace: unsafe::reinterpret_cast(0),
 
             reserved1: unsafe::reinterpret_cast(0),
-            reserved: (ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(), ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),    /* 16 */
-                       ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(), ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),    /* 32 */
-                       ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null())
+            reserved: (x,x,x,x,x,x,x,x, x,x,x,x,x,x,x,x,    /* 16 */
+                            x,x,x,x,x,x,x,x, x,x,x,x,x,x,x,x,   /* 32 */
+                            x,x,x,x,x,x,x,x)
+
         }
     };
 }
