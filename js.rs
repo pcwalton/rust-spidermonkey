@@ -2,7 +2,7 @@
 
 use std;
 import comm::chan;
-import ctypes::{ size_t, void };
+import ctypes::{ size_t, void, c_uint };
 import ptr::null;
 
 export new_runtime, new_context, set_options, set_version, new_class;
@@ -35,11 +35,11 @@ type JSClass = {
     trace: JSTraceOp,
 
     reserved1: JSClassInternal,
-    reserved: (void, void, void, void, void, void, void, void,  /* 8 */
-               void, void, void, void, void, void, void, void,  /* 16 */
-               void, void, void, void, void, void, void, void,  /* 24 */
-               void, void, void, void, void, void, void, void,  /* 32 */
-               void, void, void, void, void, void, void, void)  /* 40 */
+    reserved: (*void, *void, *void, *void, *void, *void, *void, *void,  /* 8 */
+               *void, *void, *void, *void, *void, *void, *void, *void,  /* 16 */
+               *void, *void, *void, *void, *void, *void, *void, *void,  /* 24 */
+               *void, *void, *void, *void, *void, *void, *void, *void,  /* 32 */
+               *void, *void, *void, *void, *void, *void, *void, *void)  /* 40 */
 };
 
 type error_report = {
@@ -231,7 +231,7 @@ native mod js {
                                         length : size_t);
     fn JS_CompileScript(cx : *JSContext, object : *JSObject,
                                bytes : *u8, length : size_t,
-                               filename : *u8, lineno : uint) -> *JSScript;
+                               filename : *u8, lineno : c_uint) -> *JSScript;
 
     /* TODO: Plenty more to add here. */
 
@@ -265,6 +265,13 @@ native mod jsrust {
     fn JSRust_GetResolveStub() -> JSResolveOp;
     fn JSRust_GetConvertStub() -> JSConvertOp;
     fn JSRust_GetFinalizeStub() -> JSFinalizeOp;
+
+    fn JSRust_GetNullJSClassInternal() -> JSClassInternal;
+    fn JSRust_GetNullJSCheckAccessOp() -> JSCheckAccessOp;
+    fn JSRust_GetNullJSNative() -> JSNative;
+    fn JSRust_GetNullJSXDRObjectOp() -> JSXDRObjectOp;
+    fn JSRust_GetNullJSHasInstanceOp() -> JSHasInstanceOp;
+    fn JSRust_GetNullJSTraceOp() -> JSTraceOp;
 
 	/* Additional features. */
     fn JSRust_NewContext(rt : *JSRuntime, stackChunkSize : size_t)
@@ -351,7 +358,6 @@ type class = {
 fn new_class(spec : class_spec) -> @class unsafe {
     // Root the name separately, and make the JSClass name point into it.
     let name = @spec.name;
-    let x : void = unsafe::reinterpret_cast(0);
     ret @{
         name: name,
         jsclass: {
@@ -367,18 +373,18 @@ fn new_class(spec : class_spec) -> @class unsafe {
             convert: jsrust::JSRust_GetConvertStub(),
             finalize: jsrust::JSRust_GetFinalizeStub(),
 
-            reserved0: unsafe::reinterpret_cast(0),
-            checkAccess: unsafe::reinterpret_cast(0),
-            call: unsafe::reinterpret_cast(0),
-            construct: unsafe::reinterpret_cast(0),
-            xdrObject: unsafe::reinterpret_cast(0),
-            hasInstance: unsafe::reinterpret_cast(0),
-            trace: unsafe::reinterpret_cast(0),
+            reserved0: ptr::null(),
+            checkAccess: ptr::null(),
+            call: ptr::null(),
+            construct: ptr::null(),
+            xdrObject: ptr::null(),
+            hasInstance: ptr::null(),
+            trace: ptr::null(),
 
-            reserved1: unsafe::reinterpret_cast(0),
-            reserved: (x,x,x,x,x,x,x,x, x,x,x,x,x,x,x,x,    /* 16 */
-                       x,x,x,x,x,x,x,x, x,x,x,x,x,x,x,x,    /* 32 */
-                       x,x,x,x,x,x,x,x)
+            reserved1: ptr::null(),
+            reserved: (ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(), ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),    /* 16 */
+                       ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(), ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),    /* 32 */
+                       ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null())
         }
     };
 }
@@ -395,7 +401,7 @@ fn compile_script(cx : context, object : object, src : [u8], filename : str,
                   lineno : uint) -> script unsafe {
     let jsscript = str::as_buf(filename, { |buf|
         js::JS_CompileScript(*cx, *object, vec::to_ptr(src),
-                             vec::len(src) as size_t, buf, lineno)
+                             vec::len(src) as size_t, buf, lineno as c_uint)
     });
     if jsscript == ptr::null() {
         fail;   // TODO: this is antisocial
