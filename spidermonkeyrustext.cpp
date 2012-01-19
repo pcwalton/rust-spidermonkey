@@ -74,20 +74,8 @@ extern "C" JSEnumerateOp JSRust_GetEnumerateStub() {
     return JS_EnumerateStub;
 }
 
-extern "C" JSBool JSRust_ResolveLazyStandardClasses(JSContext *cx, JSObject *obj, jsid id, uintN flags, JSObject **objp) {
-    JSBool resolved;
-
-    if (!JS_ResolveStandardClass(cx, obj, id, &resolved))
-        return JS_FALSE;
-    if (resolved) {
-        *objp = obj;
-        return JS_TRUE;
-    }
-    return JS_TRUE;
-}
-
 extern "C" JSResolveOp JSRust_GetResolveStub() {
-    return (JSResolveOp) JSRust_ResolveLazyStandardClasses;
+    return JS_ResolveStub;
 }
 
 extern "C" JSConvertOp JSRust_GetConvertStub() {

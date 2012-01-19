@@ -14,7 +14,7 @@ fn main() {
 	let err_port = port();
 	js::ext::set_error_channel(cx, chan(err_port));
 
-    let class = js::new_class({ name: "global", flags: 0x47704u32 });
+    let class = js::new_class({ name: "global", flags: 0x47700u32 });
     let global = js::new_compartment_and_global_object(cx, class,
                                                        js::null_principals());
 

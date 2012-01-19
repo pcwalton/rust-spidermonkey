@@ -134,8 +134,6 @@ native mod js {
     fn JS_ResumeRequest(cx : *JSContext, saveDepth : jsrefcount);
     fn JS_IsInRequest(cx : *JSContext) -> bool;
 
-    fn JS_Lock(rt : *JSRuntime);
-    fn JS_Unlock(rt : *JSRuntime);
     // fn JS_SetContextCallback(rt : *JSRuntime,
     //                                 cxCallback : JSContextCallback);
     fn JS_DestroyContext(cx : *JSContext);
