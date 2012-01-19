@@ -366,15 +366,15 @@ fn new_class(spec : class_spec) -> @class unsafe {
             convert: jsrust::JSRust_GetConvertStub(),
             finalize: jsrust::JSRust_GetFinalizeStub(),
 
-            reserved0: ptr::null(),
-            checkAccess: ptr::null(),
-            call: ptr::null(),
-            construct: ptr::null(),
-            xdrObject: ptr::null(),
-            hasInstance: ptr::null(),
-            trace: ptr::null(),
+            reserved0: unsafe::reinterpret_cast(0),
+            checkAccess: unsafe::reinterpret_cast(0),
+            call: unsafe::reinterpret_cast(0),
+            construct: unsafe::reinterpret_cast(0),
+            xdrObject: unsafe::reinterpret_cast(0),
+            hasInstance: unsafe::reinterpret_cast(0),
+            trace: unsafe::reinterpret_cast(0),
 
-            reserved1: ptr::null(),
+            reserved1: unsafe::reinterpret_cast(0),
             reserved: (ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(), ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),    /* 16 */
                        ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(), ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),    /* 32 */
                        ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null(),ptr::null())
