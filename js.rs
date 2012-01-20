@@ -375,8 +375,8 @@ fn new_class(spec : class_spec) -> @class unsafe {
 
             reserved1: unsafe::reinterpret_cast(0),
             reserved: (x,x,x,x,x,x,x,x, x,x,x,x,x,x,x,x,    /* 16 */
-                            x,x,x,x,x,x,x,x, x,x,x,x,x,x,x,x,   /* 32 */
-                            x,x,x,x,x,x,x,x)
+                       x,x,x,x,x,x,x,x, x,x,x,x,x,x,x,x,    /* 32 */
+                       x,x,x,x,x,x,x,x)
 
         }
     };
