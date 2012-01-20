@@ -2,7 +2,7 @@
 
 use std;
 import comm::chan;
-import ctypes::{ size_t, void };
+import ctypes::{ size_t, void, c_uint };
 import ptr::null;
 
 export new_runtime, new_context, set_options, set_version, new_class;
@@ -35,11 +35,11 @@ type JSClass = {
     trace: JSTraceOp,
 
     reserved1: JSClassInternal,
-    reserved: (void, void, void, void, void, void, void, void,  /* 8 */
-               void, void, void, void, void, void, void, void,  /* 16 */
-               void, void, void, void, void, void, void, void,  /* 24 */
-               void, void, void, void, void, void, void, void,  /* 32 */
-               void, void, void, void, void, void, void, void)  /* 40 */
+    reserved: (*void, *void, *void, *void, *void, *void, *void, *void,  /* 8 */
+               *void, *void, *void, *void, *void, *void, *void, *void,  /* 16 */
+               *void, *void, *void, *void, *void, *void, *void, *void,  /* 24 */
+               *void, *void, *void, *void, *void, *void, *void, *void,  /* 32 */
+               *void, *void, *void, *void, *void, *void, *void, *void)  /* 40 */
 };
 
 type error_report = {
@@ -47,6 +47,11 @@ type error_report = {
 	filename: str,
 	lineno: uint,
 	flags: uint
+};
+
+type log_message = {
+	message: str,
+	level: uint,
 };
 
 /* Opaque types. */
@@ -129,8 +134,6 @@ native mod js {
     fn JS_ResumeRequest(cx : *JSContext, saveDepth : jsrefcount);
     fn JS_IsInRequest(cx : *JSContext) -> bool;
 
-    fn JS_Lock(rt : *JSRuntime);
-    fn JS_Unlock(rt : *JSRuntime);
     // fn JS_SetContextCallback(rt : *JSRuntime,
     //                                 cxCallback : JSContextCallback);
     fn JS_DestroyContext(cx : *JSContext);
@@ -226,7 +229,7 @@ native mod js {
                                         length : size_t);
     fn JS_CompileScript(cx : *JSContext, object : *JSObject,
                                bytes : *u8, length : size_t,
-                               filename : *u8, lineno : uint) -> *JSScript;
+                               filename : *u8, lineno : c_uint) -> *JSScript;
 
     /* TODO: Plenty more to add here. */
 
@@ -265,6 +268,8 @@ native mod jsrust {
     fn JSRust_NewContext(rt : *JSRuntime, stackChunkSize : size_t)
         -> *JSContext;
 	fn JSRust_SetErrorChannel(cx : *JSContext, chan : chan<error_report>)
+		-> bool;
+	fn JSRust_SetLogChannel(cx : *JSContext, object : *JSObject, chan : chan<log_message>)
 		-> bool;
 	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
 }
@@ -344,7 +349,7 @@ type class = {
 fn new_class(spec : class_spec) -> @class unsafe {
     // Root the name separately, and make the JSClass name point into it.
     let name = @spec.name;
-    let x : void = unsafe::reinterpret_cast(0);
+    let x : *void = ptr::null();
     ret @{
         name: name,
         jsclass: {
@@ -372,6 +377,7 @@ fn new_class(spec : class_spec) -> @class unsafe {
             reserved: (x,x,x,x,x,x,x,x, x,x,x,x,x,x,x,x,    /* 16 */
                        x,x,x,x,x,x,x,x, x,x,x,x,x,x,x,x,    /* 32 */
                        x,x,x,x,x,x,x,x)
+
         }
     };
 }
@@ -388,7 +394,7 @@ fn compile_script(cx : context, object : object, src : [u8], filename : str,
                   lineno : uint) -> script unsafe {
     let jsscript = str::as_buf(filename, { |buf|
         js::JS_CompileScript(*cx, *object, vec::to_ptr(src),
-                             vec::len(src) as size_t, buf, lineno)
+                             vec::len(src) as size_t, buf, lineno as c_uint)
     });
     if jsscript == ptr::null() {
         fail;   // TODO: this is antisocial
@@ -448,6 +454,10 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
 mod ext {
 	fn set_error_channel(cx : context, chan : chan<error_report>) {
 		if !jsrust::JSRust_SetErrorChannel(*cx, chan) { fail; }
+	}
+
+	fn set_log_channel(cx : context, object : object, chan : chan<log_message>) {
+		if !jsrust::JSRust_SetLogChannel(*cx, *object, chan) { fail; }
 	}
 
 	fn init_rust_library(cx : context, object : object) {
