@@ -9,6 +9,7 @@ export new_runtime, new_context, set_options, set_version, new_class;
 export new_compartment_and_global_object, init_standard_classes, options;
 export null_principals, compile_script, execute_script, value_to_source;
 export get_string_bytes, get_string, ext;
+export error_report, log_message;
 
 /* Structures. */
 type JSClass = {
@@ -54,24 +55,29 @@ type log_message = {
 	level: uint,
 };
 
+type io_message = {
+	message: str,
+	level: uint,
+};
+
 /* Opaque types. */
 type jsval = u64;
-tag jsid { jsid_priv(uint); }
-tag object { object_priv(*JSObject); }
-tag principals { principals_priv(*JSPrincipals); }
-tag script { script_priv(*JSScript); }
-tag string { string_priv(*JSString); }
+enum jsid { jsid_priv(uint) }
+enum object { object_priv(*JSObject) }
+enum principals { principals_priv(*JSPrincipals) }
+enum script { script_priv(*JSScript) }
+enum string { string_priv(*JSString) }
 
-tag JSClassInternal { JSClassInternal(@JSClassInternal); }
-tag JSCompartment   { JSCompartment(@JSCompartment);     }
-tag JSContext       { JSContext(@JSContext);             }
-tag JSObject        { JSObject(@JSObject);               }
-tag JSPrincipals    { JSPrincipals(@JSPrincipals);       }
-tag JSRuntime       { JSRuntime(@JSRuntime);             }
-tag JSScript        { JSScript(@JSScript);               }
-tag JSString        { JSString(@JSString);               }
-tag JSCrossCompartmentCall {
-    JSCrossCompartmentCall(@JSCrossCompartmentCall);
+enum JSClassInternal { JSClassInternal(@JSClassInternal) }
+enum JSCompartment   { JSCompartment(@JSCompartment)     }
+enum JSContext       { JSContext(@JSContext)             }
+enum JSObject        { JSObject(@JSObject)               }
+enum JSPrincipals    { JSPrincipals(@JSPrincipals)       }
+enum JSRuntime       { JSRuntime(@JSRuntime)             }
+enum JSScript        { JSScript(@JSScript)               }
+enum JSString        { JSString(@JSString)               }
+enum JSCrossCompartmentCall {
+    JSCrossCompartmentCall(@JSCrossCompartmentCall)
 }
 
 /* Types that shouldn't be opaque, but currently are due to limitations in
@@ -83,17 +89,17 @@ type JSResolveOp = u64;
 type JSConvertOp = u64;
 type JSFinalizeOp = u64;
 
-tag JSCheckAccessOp     { JSCheckAccessOp(@JSCheckAccessOp);       }
-tag JSEqualityOp        { JSEqualityOp(@JSEqualityOp);             }
-tag JSHasInstanceOp     { JSHasInstanceOp(@JSHasInstanceOp);       }
-tag JSNative            { JSNative(@JSNative);                     }
-tag JSNewEnumerateOp    { JSNewEnumerateOp(@JSNewEnumerateOp);     }
-tag JSNewResolveOp      { JSNewResolveOp(@JSNewResolveOp);         }
-tag JSStringFinalizeOp  { JSStringFinalizeOp(@JSStringFinalizeOp); }
-tag JSTraceOp           { JSTraceOp(@JSTraceOp);                   }
-tag JSTraceNamePrinter  { JSTraceNamePrinter(@JSTraceNamePrinter); }
-tag JSTypeOfOp          { JSTypeOfOp(@JSTypeOfOp);                 }
-tag JSXDRObjectOp       { JSXDRObjectOp(@JSXDRObjectOp);           }
+enum JSCheckAccessOp     { JSCheckAccessOp(@JSCheckAccessOp)       }
+enum JSEqualityOp        { JSEqualityOp(@JSEqualityOp)             }
+enum JSHasInstanceOp     { JSHasInstanceOp(@JSHasInstanceOp)       }
+enum JSNative            { JSNative(@JSNative)                     }
+enum JSNewEnumerateOp    { JSNewEnumerateOp(@JSNewEnumerateOp)     }
+enum JSNewResolveOp      { JSNewResolveOp(@JSNewResolveOp)         }
+enum JSStringFinalizeOp  { JSStringFinalizeOp(@JSStringFinalizeOp) }
+enum JSTraceOp           { JSTraceOp(@JSTraceOp)                   }
+enum JSTraceNamePrinter  { JSTraceNamePrinter(@JSTraceNamePrinter) }
+enum JSTypeOfOp          { JSTypeOfOp(@JSTypeOfOp)                 }
+enum JSXDRObjectOp       { JSXDRObjectOp(@JSXDRObjectOp)           }
 
 /* Non-opaque types. */
 type JSProtoKey = uint;
