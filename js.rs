@@ -9,7 +9,7 @@ export new_runtime, new_context, set_options, set_version, new_class;
 export new_compartment_and_global_object, init_standard_classes, options;
 export null_principals, compile_script, execute_script, value_to_source;
 export get_string_bytes, get_string, ext;
-export error_report, log_message;
+export error_report, log_message, io_message;
 
 /* Structures. */
 type JSClass = {
@@ -56,8 +56,9 @@ type log_message = {
 };
 
 type io_message = {
-	message: str,
-	level: uint,
+    a1: u32,
+    a2: str,
+    a3: u32
 };
 
 /* Opaque types. */
@@ -277,6 +278,8 @@ native mod jsrust {
 		-> bool;
 	fn JSRust_SetLogChannel(cx : *JSContext, object : *JSObject, chan : chan<log_message>)
 		-> bool;
+	fn JSRust_SetIoChannel(cx : *JSContext, object : *JSObject, chan : chan<io_message>)
+		-> bool;
 	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
 }
 
@@ -324,9 +327,9 @@ fn set_version(cx : context, version : JSVersion) {
 
 /* Objects */
 
-fn new_compartment_and_global_object(cx : context, class : @class,
+fn new_compartment_and_global_object(cx : context, clas : @class,
                                      principals : principals) -> object {
-    let jsclass = ptr::addr_of(class.jsclass);
+    let jsclass = ptr::addr_of(clas.jsclass);
     let jsobj = js::JS_NewCompartmentAndGlobalObject(*cx, jsclass,
                                                      *principals);
     if jsobj == null() { fail; }
@@ -446,7 +449,7 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
         fail;
     }
 
-    let buf = vec::init_elt(0u8, (len as uint) + 1u);
+    let buf = vec::init_elt(0u, ((len as u8) + 1u8));
     if !js::JS_EncodeCharacters(*cx, vec::to_ptr(bytes),
                                 (vec::len(bytes) / 2u) as size_t,
                                 vec::to_ptr(buf), ptr::addr_of(len)) {
@@ -464,6 +467,19 @@ mod ext {
 
 	fn set_log_channel(cx : context, object : object, chan : chan<log_message>) {
 		if !jsrust::JSRust_SetLogChannel(*cx, *object, chan) { fail; }
+	}
+
+   fn fire_io_callback(cx : context, global : object, req_id: u32) {
+        let code = #fmt("_resume(%u)", req_id as uint);
+        log(core::error, ("asdf", code));
+
+        let script = compile_script(
+            cx, global, str::bytes(code), "test.js", 0u);
+        execute_script(cx, global, script);
+   }
+
+	fn set_io_channel(cx : context, object : object, chan : chan<io_message>) {
+		if !jsrust::JSRust_SetIoChannel(*cx, *object, chan) { fail; }
 	}
 
 	fn init_rust_library(cx : context, object : object) {
