@@ -8,5 +8,4 @@ document._setMutationHandler(function() {
     }
 });
 
-print(window);
-window.location = "http://107.21.70.111/";
+window.location = "http://192.0.43.10/";

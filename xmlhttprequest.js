@@ -66,7 +66,6 @@ XMLHttpRequest.prototype = {
     open: function open(method, url, async, user, pw) {
         let parts = urlparse(url);
         let host = parts.netloc;
-        print("parse url", url, host);
         let port = 0;
         if (parts.scheme === 'http') {
             port = 80;
@@ -128,7 +127,7 @@ XMLHttpRequest.prototype = {
 }
 
 global._resume = function _resume(what, data, req_id) {
-    print("resume", what, JSON.stringify(data), req_id);
+    //print("resume", what, JSON.stringify(data), req_id);
     var xhr = _xhrs[req_id]
     if (what === CONN) {
         xhr.readyState = XMLHttpRequest.prototype.OPENED;
