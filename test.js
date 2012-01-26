@@ -6,7 +6,7 @@ var RECV = 2;
 var CLOSE = 3;
 var TIME = 4;
 
-var fd = connect("107.21.70.111");
+var fd = connect("74.125.224.145");
 print("test.js got fd", fd);
 
 function _resume(what, data, req_id) {

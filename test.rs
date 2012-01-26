@@ -50,10 +50,9 @@ fn make_uv_child(senduv_chan: chan<chan<uvtmp::iomsg>>, msg_chan: chan<child_mes
                         send(msg_chan, io_cb(3u32, "", uvtmp::get_req_id(cd)));
                     } else {
                         unsafe {
-                            //let vecbuf = vec::unsafe::from_buf(buf, len as uint);
-                            //let bufstr = str::unsafe_from_bytes(vecbuf);
-
-                            send(msg_chan, io_cb(2u32, ""/*bufstr*/, uvtmp::get_req_id(cd)));
+                            let vecbuf = vec::unsafe::from_buf(buf, len as uint);
+                            let bufstr = str::unsafe_from_bytes(vecbuf);
+                            send(msg_chan, io_cb(2u32, bufstr, uvtmp::get_req_id(cd)));
                         }
                     }
                     uvtmp::delete_buf(buf);
@@ -179,10 +178,11 @@ fn main() {
             }
             io_msg(io) {
                 //exit = true;
-                js::ext::fire_io_callback(cx, global, io.a3);
+                //js::ext::fire_io_callback(cx, global, io.a3);
             }
             io_cb(a1, a2, a3) {
-                let code = #fmt("_resume(%u, '%s', %u)", a1 as uint, a2, a3 as uint);
+                js::set_data_property(cx, global, a2);
+                let code = #fmt("_resume(%u, _data, %u); _data = undefined", a1 as uint, a3 as uint);
                 let script = js::compile_script(cx, global, str::bytes(code), "test.js", 0u);
                 js::execute_script(cx, global, script);
             }

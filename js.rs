@@ -8,7 +8,7 @@ import ptr::null;
 export new_runtime, new_context, set_options, set_version, new_class;
 export new_compartment_and_global_object, init_standard_classes, options;
 export null_principals, compile_script, execute_script, value_to_source;
-export get_string_bytes, get_string, ext;
+export get_string_bytes, get_string, set_data_property, ext;
 export error_report, log_message, io_message;
 
 /* Structures. */
@@ -257,7 +257,6 @@ native mod js {
                            dst : *u8, dstlenp : *size_t) -> bool;
 
     /* TODO: Plenty more to add here. */
-
 }
 
 #[link_args="-L."]
@@ -281,6 +280,7 @@ native mod jsrust {
 	fn JSRust_SetIoChannel(cx : *JSContext, object : *JSObject, chan : chan<io_message>)
 		-> bool;
 	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
+        fn JSRust_SetDataOnObject(cx : *JSContext, object : *JSObject, val : str::sbuf, vallen: u32);
 }
 
 resource runtime(rt : *JSRuntime) {
@@ -459,6 +459,12 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
     ret str::unsafe_from_bytes(buf);
 }
 
+fn set_data_property(cx : context, obj : object, value : str) {
+    ret str::as_buf(value) {|buf|
+        jsrust::JSRust_SetDataOnObject(*cx, *obj, buf, str::byte_len(value) as u32);
+    }
+}
+
 /** Rust extensions to the JavaScript language bindings. */
 mod ext {
 	fn set_error_channel(cx : context, chan : chan<error_report>) {
@@ -468,15 +474,6 @@ mod ext {
 	fn set_log_channel(cx : context, object : object, chan : chan<log_message>) {
 		if !jsrust::JSRust_SetLogChannel(*cx, *object, chan) { fail; }
 	}
-
-   fn fire_io_callback(cx : context, global : object, req_id: u32) {
-        let code = #fmt("_resume(%u)", req_id as uint);
-        log(core::error, ("asdf", code));
-
-        let script = compile_script(
-            cx, global, str::bytes(code), "test.js", 0u);
-        execute_script(cx, global, script);
-   }
 
 	fn set_io_channel(cx : context, object : object, chan : chan<io_message>) {
 		if !jsrust::JSRust_SetIoChannel(*cx, *object, chan) { fail; }

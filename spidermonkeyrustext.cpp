@@ -442,9 +442,11 @@ extern "C" JSBool JSRust_SetIoChannel(JSContext *cx,
     return JS_TRUE;
 }
 
-
-
-
-
+extern "C" void JSRust_SetDataOnObject(JSContext *cx, JSObject *obj, const char * val, uint32_t vallen) {
+    JSString *valstr = JS_NewStringCopyN(cx, val, vallen);
+    jsval * jv = (jsval *)malloc(sizeof(jsval));
+    *jv = STRING_TO_JSVAL(valstr);
+    JS_SetProperty(cx, obj, "_data", jv);
+}
 
 
