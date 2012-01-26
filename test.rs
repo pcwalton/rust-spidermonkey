@@ -183,16 +183,32 @@ fn main() {
             io_cb(a1, a2, a3) {
                 js::set_data_property(cx, global, a2);
                 let code = #fmt("_resume(%u, _data, %u); _data = undefined", a1 as uint, a3 as uint);
-                let script = js::compile_script(cx, global, str::bytes(code), "test.js", 0u);
+                let script = js::compile_script(cx, global, str::bytes(code), "io", 0u);
                 js::execute_script(cx, global, script);
             }
         }
         if setup == 3 {
             setup = 4;
+            alt std::io::read_whole_file("xmlhttprequest.js") {
+                result::ok(file) {
+                    let script = js::compile_script(
+                        cx, global, file, "xmlhttprequest.js", 0u);
+                    js::execute_script(cx, global, script);
+                }
+                _ { fail }
+            }
+            alt std::io::read_whole_file("dom.js") {
+                result::ok(file) {
+                    let script = js::compile_script(
+                        cx, global, file, "dom.js", 0u);
+                    js::execute_script(cx, global, script);
+                }
+                _ { fail }
+            }
             alt std::io::read_whole_file("test.js") {
                 result::ok(file) {
                     let script = js::compile_script(
-                        cx, global, file, "test.js", 0u);
+                        cx, global, file, "dom.js", 0u);
                     js::execute_script(cx, global, script);
                 }
                 _ { fail }

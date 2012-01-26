@@ -417,10 +417,10 @@ JSBool JSRust_Close(JSContext *cx, uintN argc, jsval *vp) {
 }
 
 static JSFunctionSpec io_functions[] = {
-    JS_FN("connect", JSRust_Connect, 1, 0),
-    JS_FN("send", JSRust_Send, 2, 0),
-    JS_FN("recv", JSRust_Recv, 2, 0),
-    JS_FN("close", JSRust_Close, 1, 0),
+    JS_FN("jsrust_connect", JSRust_Connect, 1, 0),
+    JS_FN("jsrust_send", JSRust_Send, 2, 0),
+    JS_FN("jsrust_recv", JSRust_Recv, 2, 0),
+    JS_FN("jsrust_close", JSRust_Close, 1, 0),
     JS_FS_END
 };
 
