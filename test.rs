@@ -8,6 +8,11 @@ use std;
 
 import std::{ uvtmp, io };
 
+enum stdouterr {
+    stdout(str),
+    stderr(str),
+    exitproc
+}
 
 enum child_message {
     set_log(chan<js::log_message>),
@@ -62,14 +67,10 @@ fn make_uv_child(senduv_chan: chan<chan<uvtmp::iomsg>>, msg_chan: chan<child_mes
     };
 }
 
-fn make_children(msg_chan: chan<child_message>)-> uvtmp::thread {
+fn make_children(thread : uvtmp::thread, msg_chan : chan<child_message>) {
     let senduv_port = port::<chan<uvtmp::iomsg>>();
     make_uv_child(chan(senduv_port), msg_chan);
     let uv_chan = recv(senduv_port);
-
-    let thread = uvtmp::create_thread();
-    uvtmp::start_thread(thread);
-
 
     task::spawn {||
         let log_port = port::<js::log_message>();
@@ -77,15 +78,6 @@ fn make_children(msg_chan: chan<child_message>)-> uvtmp::thread {
 
         while true {
             send(msg_chan, log_msg(recv(log_port)));
-        }
-    };
-
-    task::spawn {||
-        let err_port = port::<js::error_report>();
-        send(msg_chan, set_err(chan(err_port)));
-
-        while true {
-            send(msg_chan, err_msg(recv(err_port)));
         }
     };
 
@@ -115,25 +107,24 @@ fn make_children(msg_chan: chan<child_message>)-> uvtmp::thread {
                     uvtmp::read_start(thread, result.a3, uv_chan);
                 }
                 3u32 { // CLOSE
-                    log(core::error, "close");
+                    //log(core::error, "close");
 
                 }
                 4u32 { // SETTIMEOUT
-                    log(core::error, "settimeout");
+                    //log(core::error, "settimeout");
 
                 }
             }
         }
     };
-
-    ret thread;
 }
 
-fn main() {
-    let msg_port = port::<child_message>();
-    let thread = make_children(chan(msg_port));
 
-    let rt = js::new_runtime(8u32 * 1024u32 * 1024u32);
+fn make_actor(myid : int, rt : js::runtime, thread : uvtmp::thread, out : chan<stdouterr>) -> chan<child_message> {
+
+    let msg_port = port::<child_message>();
+    make_children(thread, chan(msg_port));
+
     let cx = js::new_context(rt, 8192 as size_t);
     js::set_options(cx, js::options::varobjfix | js::options::methodjit);
     js::set_version(cx, 185u);
@@ -156,25 +147,23 @@ fn main() {
                     cx, global, ch);
                 setup += 1;
             }
-            set_err(ch) {
-                js::ext::set_error_channel(
-                    cx, ch);
-                setup += 1;
-            }
             set_io(ch) {
                 js::ext::set_io_channel(
                     cx, global, ch);
                 setup += 1;
             }
             log_msg(m) {
-                log(core::error, m.message);
+                //log(core::error, m.message);
                 if m.level == 1u {
+                    send(out, stderr(#fmt("[%d] %s", myid, m.message)));
                     //exit = true;
+                } else {
+                    send(out, stdout(#fmt("[%d] %s", myid, m.message)));
                 }
             }
             err_msg(err) {
                 //exit = true;
-                log(core::error, ("err_msg", err));
+                //send(out, stdout(#fmt("[%d] %s", myid, err.message)));
             }
             io_msg(io) {
                 //exit = true;
@@ -182,13 +171,22 @@ fn main() {
             }
             io_cb(a1, a2, a3) {
                 js::set_data_property(cx, global, a2);
-                let code = #fmt("_resume(%u, _data, %u); _data = undefined", a1 as uint, a3 as uint);
+                let code = #fmt("_resume(%u, _data, %u); _data = undefined; XMLHttpRequest.requests_outstanding", a1 as uint, a3 as uint);
                 let script = js::compile_script(cx, global, str::bytes(code), "io", 0u);
-                js::execute_script(cx, global, script);
+                let result = js::execute_script(cx, global, script);
+                alt result {
+                    some(x) {
+                        let val = js::get_int(cx, x);
+                        if val == 0i32 {
+                            log(core::error, "Task complete.");
+                            send(out, exitproc);
+                        }
+                    }
+                }
             }
         }
-        if setup == 3 {
-            setup = 4;
+        if setup == 2 {
+            setup = 3;
             alt std::io::read_whole_file("xmlhttprequest.js") {
                 result::ok(file) {
                     let script = js::compile_script(
@@ -205,11 +203,30 @@ fn main() {
                 }
                 _ { fail }
             }
-            alt std::io::read_whole_file("test.js") {
+            alt std::io::read_whole_file_str("test.js") {
                 result::ok(file) {
                     let script = js::compile_script(
-                        cx, global, file, "dom.js", 0u);
+                        cx, global, str::bytes(#fmt("try { %s } catch (e) { print('Error: ', e, e.stack) }", file)), "test.js", 0u);
                     js::execute_script(cx, global, script);
+
+                    let checkwait = js::compile_script(
+                        cx, global, str::bytes("XMLHttpRequest.requests_outstanding"), "test.js", 0u);
+                    let result = js::execute_script(cx, global, checkwait);
+                    alt result {
+                        some(x) {
+                            let val = js::get_int(cx, x);
+                            if val == 0i32 {
+                                send(out, exitproc);
+                            }else {
+
+                            }
+                            /*let bytes = js::get_string_bytes(cx, js::value_to_source(cx, x));
+                            let bufstr = str::unsafe_from_bytes(bytes);
+                            if str::eq(bufstr, "0") {
+                                log(core::error, bufstr);
+                            }*/
+                        }
+                    }
                 }
                 _ { fail }
             }
@@ -219,10 +236,45 @@ fn main() {
             //js::execute_script(cx, global, xit);
         }
     }
+    ret chan(msg_port);
+}
+
+
+fn main() {
+    let maxbytes = 8u32 * 1024u32 * 1024u32;
+
+    let thread = uvtmp::create_thread();
+    uvtmp::start_thread(thread);
+
+    let stdoutport = port::<stdouterr>();
+    let stdoutchan = chan(stdoutport);
+    task::spawn {||
+        make_actor(1, js::get_thread_runtime(maxbytes), thread, stdoutchan);
+    };
+
+    task::spawn {||
+        make_actor(2, js::get_thread_runtime(maxbytes), thread, stdoutchan);
+    };
+
+    let left = 2;
+    while true {
+        alt recv(stdoutport) {
+            stdout(x) { log(core::error, x); }
+            stderr(x) { log(core::error, x); }
+            exitproc {
+                left = left - 1;
+                log(core::error, #fmt("LEFT: %d", left));
+                if left == 0 {
+                    break;
+                }
+            }
+        }
+    }
 
     uvtmp::join_thread(thread);
     uvtmp::delete_thread(thread);
 
+    log(core::error, "Done.");
     /*let result_src = js::value_to_source(cx, result);
     #error["Result: %s", js::get_string(cx, result_src)];*/
 }

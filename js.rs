@@ -5,10 +5,10 @@ import comm::chan;
 import ctypes::{ size_t, void, c_uint };
 import ptr::null;
 
-export new_runtime, new_context, set_options, set_version, new_class;
-export new_compartment_and_global_object, init_standard_classes, options;
+export new_runtime, get_thread_runtime, runtime, new_context, context, set_options, set_version, new_class;
+export new_compartment_and_global_object, object, init_standard_classes, options;
 export null_principals, compile_script, execute_script, value_to_source;
-export get_string_bytes, get_string, set_data_property, ext;
+export get_string_bytes, get_string, get_int, set_data_property, ext;
 export error_report, log_message, io_message;
 
 /* Structures. */
@@ -257,6 +257,8 @@ native mod js {
                            dst : *u8, dstlenp : *size_t) -> bool;
 
     /* TODO: Plenty more to add here. */
+
+    fn JS_ValueToInt32(cx : *JSContext, v : jsval, ip :*i32) -> bool;
 }
 
 #[link_args="-L."]
@@ -281,6 +283,8 @@ native mod jsrust {
 		-> bool;
 	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
         fn JSRust_SetDataOnObject(cx : *JSContext, object : *JSObject, val : str::sbuf, vallen: u32);
+
+        fn JSRust_GetThreadRuntime(maxbytes : u32) -> *JSRuntime;
 }
 
 resource runtime(rt : *JSRuntime) {
@@ -299,6 +303,10 @@ resource request(cx : *JSContext) {
 
 fn new_runtime(maxbytes : u32) -> runtime {
     ret runtime(js::JS_Init(maxbytes));
+}
+
+fn get_thread_runtime(maxbytes : u32) -> runtime {
+    ret runtime(jsrust::JSRust_GetThreadRuntime(maxbytes));
 }
 
 fn shut_down() {
@@ -457,6 +465,12 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
     }
 
     ret str::unsafe_from_bytes(buf);
+}
+
+fn get_int(cx : context, num : jsval) -> i32 unsafe {
+    let oparam : i32 = 0i32;
+    js::JS_ValueToInt32(*cx, num, ptr::addr_of(oparam));
+    ret oparam;
 }
 
 fn set_data_property(cx : context, obj : object, value : str) {

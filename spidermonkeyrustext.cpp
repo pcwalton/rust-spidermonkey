@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdint.h>
+#include <pthread.h>
 
 /*
  * Rust API declarations.
@@ -214,6 +215,8 @@ static JSBool JSRust_Print(JSContext *cx, uintN argc, jsval *vp) {
     uintN i;
     JSString *str;
     char *bytes;
+
+    printf("%p ", pthread_self());
 
     argv = JS_ARGV(cx, vp);
     for (i = 0; i < argc; i++) {
@@ -449,4 +452,29 @@ extern "C" void JSRust_SetDataOnObject(JSContext *cx, JSObject *obj, const char 
     JS_SetProperty(cx, obj, "_data", jv);
 }
 
+static pthread_mutex_t get_runtime_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_key_t thread_runtime_key;
+static int initialized = 0;
+
+JSRuntime * jsrust_getthreadruntime(uint32_t max_bytes) {
+    JSRuntime *rt;
+    pthread_mutex_lock(&get_runtime_mutex);
+
+    if (!initialized) {
+        pthread_key_create(&thread_runtime_key, NULL);
+        initialized = 1;
+    }
+    pthread_mutex_unlock(&get_runtime_mutex);
+
+    rt = (JSRuntime *)pthread_getspecific(thread_runtime_key);
+    if (rt == NULL) {
+        rt = JS_NewRuntime(max_bytes);
+        pthread_setspecific(thread_runtime_key, (const void *)rt);
+    }
+    return rt;
+}
+
+extern "C" JSRuntime * JSRust_GetThreadRuntime(uint32_t max_bytes) {
+    return jsrust_getthreadruntime(max_bytes);
+}
 

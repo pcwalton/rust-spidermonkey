@@ -51,6 +51,7 @@ function XMLHttpRequest() {
     this._headers = [];
     this._responseHeaders = [];
 }
+XMLHttpRequest.requests_outstanding = 0;
 XMLHttpRequest.prototype = {
     UNSENT: 0,
     OPENED: 1,
@@ -81,6 +82,7 @@ XMLHttpRequest.prototype = {
             host = host.substring(0, i);
         }
         this._fd = jsrust_connect(host); // TODO support port
+        XMLHttpRequest.requests_outstanding++;
         this._host = host;
         this._method = method;
         this._url = parts.url;
@@ -127,6 +129,7 @@ XMLHttpRequest.prototype = {
 }
 
 global._resume = function _resume(what, data, req_id) {
+    print("Handling request. Total:", XMLHttpRequest.requests_outstanding);
     //print("resume", what, JSON.stringify(data), req_id);
     var xhr = _xhrs[req_id]
     if (what === CONN) {
@@ -199,7 +202,10 @@ global._resume = function _resume(what, data, req_id) {
         }
     } else if (what === CLOSE) {
         this._fd = undefined;
+        XMLHttpRequest.requests_outstanding--;
     }
+    print("Outstanding:", XMLHttpRequest.requests_outstanding);
+    return XMLHttpRequest.requests_outstanding;
 }
 
 return XMLHttpRequest;

@@ -2,10 +2,14 @@
 print("Hello, world!");
 print(document);
 
-document._setMutationHandler(function() {
-    for (var i = 0; i < arguments.length; i++) {
-        print(JSON.stringify(arguments[i]));
-    }
-});
+function test_domjs() {
+    document._setMutationHandler(function() {
+        for (var i = 0; i < arguments.length; i++) {
+            print(JSON.stringify(arguments[i]));
+        }
+    });
 
-window.location = "http://192.0.43.10/";
+    window.location = "http://127.0.0.1/";
+}
+
+//test_domjs();
