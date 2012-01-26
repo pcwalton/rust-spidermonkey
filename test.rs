@@ -41,10 +41,8 @@ fn make_uv_child(senduv_chan: chan<chan<uvtmp::iomsg>>, msg_chan: chan<child_mes
             alt msg {
                 uvtmp::connected(cd) {
                     send(msg_chan, io_cb(0u32, "onconnect", uvtmp::get_req_id(cd)));
-                    log(core::error, ("CONN", uvtmp::get_req_id(cd)));
                 }
                 uvtmp::wrote(cd) {
-                    log(core::error, ("wrote", uvtmp::get_req_id(cd)));
                     send(msg_chan, io_cb(1u32, "onsend", uvtmp::get_req_id(cd)));
                 }
                 uvtmp::read(cd, buf, len) {
@@ -52,8 +50,6 @@ fn make_uv_child(senduv_chan: chan<chan<uvtmp::iomsg>>, msg_chan: chan<child_mes
                         send(msg_chan, io_cb(3u32, "", uvtmp::get_req_id(cd)));
                     } else {
                         unsafe {
-                            log(core::error, ("read", uvtmp::get_req_id(cd), len));
-
                             //let vecbuf = vec::unsafe::from_buf(buf, len as uint);
                             //let bufstr = str::unsafe_from_bytes(vecbuf);
 
@@ -99,46 +95,25 @@ fn make_children(msg_chan: chan<child_message>)-> uvtmp::thread {
         let io_chan = chan(io_port);
         send(msg_chan, set_io(io_chan));
 
-        let conn = disconnected;
         while true {
             let result = recv(io_port);
-            log(core::error, result);
             alt result.a1 {
                 0u32 { // CONNECT
-                    log(core::error, "connect");
-
-                    let cd = uvtmp::connect(
+                    uvtmp::connect(
                         thread, result.a3, result.a2, uv_chan);
                     /*todo check return value is ok
                     if cd == ptr::null() {
                         log(core::error, "send exception to js");
                     }*/
-                    conn = connected(cd);
                 }
                 1u32 { // SEND
-                    alt conn {
-                        disconnected {
-                            log(core::error, "send exception to js");
-                        }
-                        connected(c) {
-                            log(core::error, ("send", uvtmp::get_req_id(c)));
-                            uvtmp::write(
-                                thread, uvtmp::get_req_id(c),
-                                str::bytes("GET / HTTP/1.0\n\n"),
-                                uv_chan);
-                        }
-                    }
+                    uvtmp::write(
+                        thread, result.a3,
+                        str::bytes("GET / HTTP/1.0\n\n"),
+                        uv_chan);
                 }
                 2u32 { // RECV
-                    alt conn {
-                        disconnected {
-                            log(core::error, "send exception to js");
-                        }
-                        connected(c) {
-                            log(core::error, ("recv", uvtmp::get_req_id(c)));
-                            uvtmp::read_start(thread, uvtmp::get_req_id(c), uv_chan);
-                        }
-                    }
+                    uvtmp::read_start(thread, result.a3, uv_chan);
                 }
                 3u32 { // CLOSE
                     log(core::error, "close");
@@ -205,10 +180,8 @@ fn main() {
             io_msg(io) {
                 //exit = true;
                 js::ext::fire_io_callback(cx, global, io.a3);
-                log(core::error, ("io_msg", io.a1, io.a2, io.a3));
             }
             io_cb(a1, a2, a3) {
-                log(core::error, ("io_cb", a1, a2, a3));
                 let code = #fmt("_resume(%u, '%s', %u)", a1 as uint, a2, a3 as uint);
                 let script = js::compile_script(cx, global, str::bytes(code), "test.js", 0u);
                 js::execute_script(cx, global, script);
