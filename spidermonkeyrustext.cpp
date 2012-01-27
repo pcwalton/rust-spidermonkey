@@ -330,7 +330,7 @@ JSBool JSRust_Connect(JSContext *cx, uintN argc, jsval *vp) {
     jsrust_context_priv *priv =
         reinterpret_cast<jsrust_context_priv *>(priv_p);
 
-    JSString * a2str;
+    JSString *a2str;
 
     JS_ConvertArguments(cx,
         1, JS_ARGV(cx, vp), "S", &a2str);
@@ -445,9 +445,9 @@ extern "C" JSBool JSRust_SetIoChannel(JSContext *cx,
     return JS_TRUE;
 }
 
-extern "C" void JSRust_SetDataOnObject(JSContext *cx, JSObject *obj, const char * val, uint32_t vallen) {
+extern "C" void JSRust_SetDataOnObject(JSContext *cx, JSObject *obj, const char *val, uint32_t vallen) {
     JSString *valstr = JS_NewStringCopyN(cx, val, vallen);
-    jsval * jv = (jsval *)malloc(sizeof(jsval));
+    jsval *jv = (jsval *)malloc(sizeof(jsval));
     *jv = STRING_TO_JSVAL(valstr);
     JS_SetProperty(cx, obj, "_data", jv);
 }
@@ -456,7 +456,7 @@ static pthread_mutex_t get_runtime_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_key_t thread_runtime_key;
 static int initialized = 0;
 
-JSRuntime * jsrust_getthreadruntime(uint32_t max_bytes) {
+JSRuntime *jsrust_getthreadruntime(uint32_t max_bytes) {
     JSRuntime *rt;
     pthread_mutex_lock(&get_runtime_mutex);
 
@@ -474,7 +474,7 @@ JSRuntime * jsrust_getthreadruntime(uint32_t max_bytes) {
     return rt;
 }
 
-extern "C" JSRuntime * JSRust_GetThreadRuntime(uint32_t max_bytes) {
+extern "C" JSRuntime *JSRust_GetThreadRuntime(uint32_t max_bytes) {
     return jsrust_getthreadruntime(max_bytes);
 }
 
