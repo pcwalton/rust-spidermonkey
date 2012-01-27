@@ -1,17 +1,14 @@
 
 print("Hello, world!");
-print(document);
+
 
 function test_domjs() {
-    document._setMutationHandler(function() {
-        for (var i = 0; i < arguments.length; i++) {
-            print(JSON.stringify(arguments[i]));
-        }
+    document._setMutationHandler(function(mut) {
+        print(JSON.stringify(mut));
     });
 
     window.location = "http://127.0.0.1/";
 }
 
-postMessage([12,34,"Hello!"]);
-
+postMessage(0, [12,34,"Hello!"]);
 //test_domjs();

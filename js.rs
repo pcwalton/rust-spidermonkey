@@ -9,7 +9,7 @@ export new_runtime, get_thread_runtime, runtime, new_context, context, set_optio
 export new_compartment_and_global_object, object, init_standard_classes, options;
 export null_principals, compile_script, execute_script, value_to_source;
 export get_string_bytes, get_string, get_int, set_data_property, ext;
-export error_report, log_message, io_message;
+export error_report, log_message;
 
 /* Structures. */
 type JSClass = {
@@ -46,20 +46,16 @@ type JSClass = {
 type error_report = {
 	message: str,
 	filename: str,
-	lineno: uint,
-	flags: uint
+	lineno: u32,
+	flags: u32
 };
 
 type log_message = {
 	message: str,
-	level: uint,
+	level: u32,
+        tag: u32
 };
 
-type io_message = {
-    a1: u32,
-    a2: str,
-    a3: u32
-};
 
 /* Opaque types. */
 type jsval = u64;
@@ -279,8 +275,6 @@ native mod jsrust {
 		-> bool;
 	fn JSRust_SetLogChannel(cx : *JSContext, object : *JSObject, chan : chan<log_message>)
 		-> bool;
-	fn JSRust_SetIoChannel(cx : *JSContext, object : *JSObject, chan : chan<io_message>)
-		-> bool;
 	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
         fn JSRust_SetDataOnObject(cx : *JSContext, object : *JSObject, val : str::sbuf, vallen: u32);
 
@@ -288,8 +282,11 @@ native mod jsrust {
         fn JSRust_Exit(code : c_int);
 }
 
-resource runtime(rt : *JSRuntime) {
-    js::JS_Finish(rt);
+resource runtime(_rt : *JSRuntime) {
+    // because there is one runtime per thread, raii does not
+    // work. one task will finish but there may be other tasks
+    // on the same os thread.
+    //js::JS_Finish(rt);
 }
 
 resource context(cx : *JSContext) {
@@ -488,10 +485,6 @@ mod ext {
 
 	fn set_log_channel(cx : context, object : object, chan : chan<log_message>) {
 		if !jsrust::JSRust_SetLogChannel(*cx, *object, chan) { fail; }
-	}
-
-	fn set_io_channel(cx : context, object : object, chan : chan<io_message>) {
-		if !jsrust::JSRust_SetIoChannel(*cx, *object, chan) { fail; }
 	}
 
 	fn init_rust_library(cx : context, object : object) {

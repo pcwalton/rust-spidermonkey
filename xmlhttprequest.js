@@ -204,8 +204,9 @@ global._resume = function _resume(what, data, req_id) {
         this._fd = undefined;
         XMLHttpRequest.requests_outstanding--;
     }
-    print("Outstanding:", XMLHttpRequest.requests_outstanding);
-    return XMLHttpRequest.requests_outstanding;
+    if (XMLHttpRequest.requests_outstanding === 0) {
+        postMessage(9, "exitproc");
+    }
 }
 
 return XMLHttpRequest;

@@ -109,20 +109,16 @@ struct jsrust_context_priv {
 struct jsrust_error_report {
     rust_str *message;
     rust_str *filename;
-    uintptr_t lineno;
-    uintptr_t flags;
+    uint32_t lineno;
+    uint32_t flags;
 };
 
 struct jsrust_log_message {
     rust_str *message;
     uint32_t level;
+    uint32_t tag;
 };
 
-struct jsrust_io_event {
-    uint32_t a1;
-    rust_str *a2;
-    uint32_t a3;
-};
 
 void port_finalize(JSContext *cx, JSObject *obj) {
     rust_port *port = reinterpret_cast<rust_port *>(JS_GetPrivate(cx, obj));
@@ -190,7 +186,7 @@ void jsrust_report_error(JSContext *cx, const char *c_message,
                  priv->error_chan.port, &report);
 
     jsrust_log_message log_report =
-        { message, 1 };
+        { message, 1, 0 };
 
     chan_id_send(priv->log_tydesc, priv->log_chan.task,
                  priv->log_chan.port, &log_report);
@@ -275,12 +271,15 @@ JSBool JSRust_PostMessage(JSContext *cx, uintN argc, jsval *vp) {
     jsrust_context_priv *priv =
         reinterpret_cast<jsrust_context_priv *>(priv_p);
 
-    JSString *thestr = JS_ValueToSource(cx, JS_ARGV(cx, vp)[0]);
+    uint32_t what = 0;
+    JSString *thestr = JS_ValueToSource(cx, JS_ARGV(cx, vp)[1]);
     const char *code = JS_EncodeString(cx, thestr);
     rust_str *message = rust_str::make(code);
 
-    jsrust_log_message report =
-        { message, 0 };
+    JS_ConvertArguments(cx,
+        1, JS_ARGV(cx, vp), "u", &what);
+
+    jsrust_log_message report = { message, what, 0 };
 
     chan_id_send(priv->log_tydesc, priv->log_chan.task,
                  priv->log_chan.port, &report);
@@ -291,6 +290,120 @@ JSBool JSRust_PostMessage(JSContext *cx, uintN argc, jsval *vp) {
 
 static JSFunctionSpec postMessage_functions[] = {
     JS_FN("postMessage", JSRust_PostMessage, 0, 0),
+    JS_FS_END
+};
+
+static uint32_t io_op_num = 1;
+
+enum IO_OP {
+    STDOUT,
+    STDERR,
+    SPAWN,
+    CAST,
+    CONNECT,
+    SEND,
+    RECV,
+    CLOSE,
+    TIME,
+    EXIT
+};
+
+uint32_t jsrust_send_msg(JSContext *cx, enum IO_OP op, rust_str *data, uint32_t req_id) {
+    void *priv_p = JS_GetContextPrivate(cx);
+    assert(priv_p && "No private data associated with context!");
+    jsrust_context_priv *priv =
+        reinterpret_cast<jsrust_context_priv *>(priv_p);
+
+    uint32_t my_num = req_id;
+    if (!my_num) {
+        my_num = io_op_num++;
+    }
+
+    jsrust_log_message evt = { data, op, my_num };
+
+    chan_id_send(priv->log_tydesc, priv->log_chan.task,
+                 priv->log_chan.port, &evt);
+}
+
+JSBool JSRust_Connect(JSContext *cx, uintN argc, jsval *vp) {
+    JSString *a2str;
+
+    JS_ConvertArguments(cx,
+        1, JS_ARGV(cx, vp), "S", &a2str);
+
+    rust_str *a2 = rust_str::make(
+        JS_EncodeString(cx, a2str));
+
+    uint32_t my_num = jsrust_send_msg(cx, CONNECT, a2, 0);
+
+    JS_SET_RVAL(cx, vp, INT_TO_JSVAL(my_num));
+    return JS_TRUE;
+}
+
+JSBool JSRust_Send(JSContext *cx, uintN argc, jsval *vp) {
+    uint32_t req_id;
+    JSString *data;
+
+    JS_ConvertArguments(cx,
+        2, JS_ARGV(cx, vp), "uS", &req_id, &data);
+
+    rust_str *data_rust = rust_str::make(
+        JS_EncodeString(cx, data));
+
+    jsrust_send_msg(cx, SEND, data_rust, req_id);
+
+    JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+
+JSBool JSRust_Recv(JSContext *cx, uintN argc, jsval *vp) {
+    uint32_t req_id;
+    JSString *amount_str;
+
+    JS_ConvertArguments(cx,
+        2, JS_ARGV(cx, vp), "uS", &req_id, &amount_str);
+
+    rust_str *amount_rust = rust_str::make(
+        JS_EncodeString(cx, amount_str));
+
+
+    jsrust_send_msg(cx, RECV, amount_rust, req_id);
+
+    JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+
+JSBool JSRust_Close(JSContext *cx, uintN argc, jsval *vp) {
+    uint32_t req_id;
+
+    JS_ConvertArguments(cx,
+        1, JS_ARGV(cx, vp), "u", &req_id);
+
+    rust_str *nothing = rust_str::make("");
+
+    jsrust_send_msg(cx, CLOSE, nothing, req_id);
+
+    JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+
+JSBool JSRust_Exit(JSContext *cx, uintN argc, jsval *vp) {
+    uint32_t req_id;
+
+    rust_str *nothing = rust_str::make("");
+
+    jsrust_send_msg(cx, EXIT, nothing, 0);
+
+    JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+
+static JSFunctionSpec io_functions[] = {
+    JS_FN("jsrust_connect", JSRust_Connect, 1, 0),
+    JS_FN("jsrust_send", JSRust_Send, 2, 0),
+    JS_FN("jsrust_recv", JSRust_Recv, 2, 0),
+    JS_FN("jsrust_close", JSRust_Close, 1, 0),
+    JS_FN("jsrust_exit", JSRust_Exit, 0, 0),
     JS_FS_END
 };
 
@@ -307,142 +420,13 @@ extern "C" JSBool JSRust_SetLogChannel(JSContext *cx,
     priv->log_chan = *channel;
 
     JS_DefineFunctions(cx, global, postMessage_functions);
+    JS_DefineFunctions(cx, global, io_functions);
 
     return JS_TRUE;
 }
 
 extern "C" JSBool JSRust_Exit(int code) {
     exit(code);
-}
-
-static uint32_t timeout_num = 0;
-
-enum IO_OP {
-    CONNECT,
-    SEND,
-    RECV,
-    CLOSE
-};
-
-JSBool JSRust_Connect(JSContext *cx, uintN argc, jsval *vp) {
-    void *priv_p = JS_GetContextPrivate(cx);
-    assert(priv_p && "No private data associated with context!");
-    jsrust_context_priv *priv =
-        reinterpret_cast<jsrust_context_priv *>(priv_p);
-
-    JSString *a2str;
-
-    JS_ConvertArguments(cx,
-        1, JS_ARGV(cx, vp), "S", &a2str);
-
-    rust_str *a2 = rust_str::make(
-        JS_EncodeString(cx, a2str));
-
-    uint32_t my_num = timeout_num++;
-
-    jsrust_io_event evt = { CONNECT, a2, my_num };
-
-    chan_id_send(priv->io_tydesc, priv->io_chan.task,
-                 priv->io_chan.port, &evt);
-
-    JS_SET_RVAL(cx, vp, INT_TO_JSVAL(my_num));
-    return JS_TRUE;
-}
-
-JSBool JSRust_Send(JSContext *cx, uintN argc, jsval *vp) {
-    void *priv_p = JS_GetContextPrivate(cx);
-    assert(priv_p && "No private data associated with context!");
-    jsrust_context_priv *priv =
-        reinterpret_cast<jsrust_context_priv *>(priv_p);
-
-    uint32_t req_id;
-    JSString *data;
-
-    JS_ConvertArguments(cx,
-        2, JS_ARGV(cx, vp), "uS", &req_id, &data);
-
-    rust_str *data_rust = rust_str::make(
-        JS_EncodeString(cx, data));
-
-    jsrust_io_event evt = { SEND, data_rust, req_id };
-
-    chan_id_send(priv->io_tydesc, priv->io_chan.task,
-                 priv->io_chan.port, &evt);
-
-    JS_SET_RVAL(cx, vp, JSVAL_NULL);
-    return JS_TRUE;
-}
-
-JSBool JSRust_Recv(JSContext *cx, uintN argc, jsval *vp) {
-    void *priv_p = JS_GetContextPrivate(cx);
-    assert(priv_p && "No private data associated with context!");
-    jsrust_context_priv *priv =
-        reinterpret_cast<jsrust_context_priv *>(priv_p);
-
-    uint32_t req_id;
-    JSString *amount_str;
-
-    JS_ConvertArguments(cx,
-        2, JS_ARGV(cx, vp), "uS", &req_id, &amount_str);
-
-    rust_str *amount_rust = rust_str::make(
-        JS_EncodeString(cx, amount_str));
-
-    jsrust_io_event evt = { RECV, amount_rust, req_id };
-
-    chan_id_send(priv->io_tydesc, priv->io_chan.task,
-                 priv->io_chan.port, &evt);
-
-    JS_SET_RVAL(cx, vp, JSVAL_NULL);
-    return JS_TRUE;
-}
-
-JSBool JSRust_Close(JSContext *cx, uintN argc, jsval *vp) {
-    void *priv_p = JS_GetContextPrivate(cx);
-    assert(priv_p && "No private data associated with context!");
-    jsrust_context_priv *priv =
-        reinterpret_cast<jsrust_context_priv *>(priv_p);
-
-    uint32_t req_id;
-
-    JS_ConvertArguments(cx,
-        1, JS_ARGV(cx, vp), "u", &req_id);
-
-    rust_str *nothing = rust_str::make("");
-
-    jsrust_io_event evt = { SEND, nothing, req_id };
-
-    chan_id_send(priv->io_tydesc, priv->io_chan.task,
-                 priv->io_chan.port, &evt);
-
-    JS_SET_RVAL(cx, vp, JSVAL_NULL);
-    return JS_TRUE;
-}
-
-static JSFunctionSpec io_functions[] = {
-    JS_FN("jsrust_connect", JSRust_Connect, 1, 0),
-    JS_FN("jsrust_send", JSRust_Send, 2, 0),
-    JS_FN("jsrust_recv", JSRust_Recv, 2, 0),
-    JS_FN("jsrust_close", JSRust_Close, 1, 0),
-    JS_FS_END
-};
-
-extern "C" JSBool JSRust_SetIoChannel(JSContext *cx,
-                                         JSObject *global,
-                                         const rust_chan_pkg *channel,
-                                         const type_desc *tydesc) {
-    void *priv_p = JS_GetContextPrivate(cx);
-    assert(priv_p && "No private data associated with context!");
-    jsrust_context_priv *priv =
-        reinterpret_cast<jsrust_context_priv *>(priv_p);
-
-    priv->io_tydesc = tydesc;
-    priv->io_chan = *channel;
-
-    JS_DefineFunctions(cx, global, io_functions);
-    JS_DefineObject(cx, global, "_io_callbacks", NULL, NULL, 0);
-
-    return JS_TRUE;
 }
 
 extern "C" void JSRust_SetDataOnObject(JSContext *cx, JSObject *obj, const char *val, uint32_t vallen) {
