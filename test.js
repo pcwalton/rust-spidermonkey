@@ -11,4 +11,5 @@ function test_domjs() {
 }
 
 postMessage(0, [12,34,"Hello!"]);
+// The network layer sometimes deadlocks; disable for now
 //test_domjs();

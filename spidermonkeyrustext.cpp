@@ -323,6 +323,8 @@ uint32_t jsrust_send_msg(JSContext *cx, enum IO_OP op, rust_str *data, uint32_t 
 
     chan_id_send(priv->log_tydesc, priv->log_chan.task,
                  priv->log_chan.port, &evt);
+
+    return my_num;
 }
 
 JSBool JSRust_Connect(JSContext *cx, uintN argc, jsval *vp) {

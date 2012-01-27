@@ -98,9 +98,9 @@ fn make_children(msg_chan : chan<child_message>, senduv_chan: chan<chan<uvtmp::i
                             let vecbuf = vec::unsafe::from_buf(buf, len as uint);
                             let bufstr = str::unsafe_from_bytes(vecbuf);
                             send(msg_chan, io_cb(2u32, bufstr, uvtmp::get_req_id(cd)));
+                            uvtmp::delete_buf(buf);
                         }
                     }
-                    uvtmp::delete_buf(buf);
                 }
                 uvtmp::whatever {
                     send(msg_chan, done);
@@ -180,7 +180,7 @@ fn make_actor(myid : int, thread : uvtmp::thread, maxbytes : u32, out : chan<chi
                         }
                         7u32 { // CLOSE
                             //log(core::error, "close");
-
+                            uvtmp::close_connection(thread, m.tag);
                         }
                         8u32 { // SETTIMEOUT
                             //log(core::error, "settimeout");
@@ -230,15 +230,15 @@ fn main() {
 
     let map = treemap::init();
 
-    for x in [1, 2, 3, 4] {
+    for x in [1, 2] {
         make_actor(x, thread, maxbytes, stdoutchan, sendchanchan);
     }
-    for _ in [1, 2, 3, 4] {
+    for _ in [1, 2] {
         let (theid, thechan) = recv(sendchanport);
         treemap::insert(map, theid, thechan);
     }
 
-    let left = 4;
+    let left = 2;
     let actorid = left;
     while true {
         alt recv(stdoutport) {
@@ -273,7 +273,8 @@ fn main() {
             }
         }
     }
-
+    // temp hack: join never returns right now
+    js::ext::rust_exit_now(0);
     uvtmp::join_thread(thread);
     uvtmp::delete_thread(thread);
 }

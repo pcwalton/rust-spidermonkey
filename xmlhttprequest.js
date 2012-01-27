@@ -111,6 +111,7 @@ XMLHttpRequest.prototype = {
         }
         if (this._connected === true) {
             jsrust_send(this._fd, this._request);
+            jsrust_recv(xhr._fd, 32768);
         }
     },
     abort: function abort() {
@@ -130,13 +131,13 @@ XMLHttpRequest.prototype = {
 
 global._resume = function _resume(what, data, req_id) {
     print("Handling request. Total:", XMLHttpRequest.requests_outstanding);
-    //print("resume", what, JSON.stringify(data), req_id);
     var xhr = _xhrs[req_id]
     if (what === CONN) {
         xhr.readyState = XMLHttpRequest.prototype.OPENED;
         xhr.onreadystatechange.apply(xhr);
         if (xhr._request) {
             jsrust_send(xhr._fd, xhr._request);
+            jsrust_recv(xhr._fd, 32768);
         } else {
             xhr._connected = true;
         }
@@ -146,7 +147,6 @@ global._resume = function _resume(what, data, req_id) {
         xhr._request = ""; //xhr._request.substring(data[1]);
         if (xhr._request.length) {
             jsrust_send(xhr._fd, xhr._request);
-        } else {
             jsrust_recv(xhr._fd, 32768);
         }
     } else if (what === RECV) {
@@ -196,6 +196,7 @@ global._resume = function _resume(what, data, req_id) {
             xhr.readyState = XMLHttpRequest.prototype.DONE;
             xhr.onreadystatechange.apply(xhr);
             delete _xhrs[xhr._id];
+            close(xhr._id);
         } else {
             xhr.readyState = XMLHttpRequest.prototype.LOADING;
             xhr.onreadystatechange.apply(xhr);
