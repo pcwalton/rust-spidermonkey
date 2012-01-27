@@ -12,4 +12,6 @@ function test_domjs() {
     window.location = "http://127.0.0.1/";
 }
 
+postMessage([12,34,"Hello!"]);
+
 //test_domjs();

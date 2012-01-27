@@ -275,11 +275,8 @@ JSBool JSRust_PostMessage(JSContext *cx, uintN argc, jsval *vp) {
     jsrust_context_priv *priv =
         reinterpret_cast<jsrust_context_priv *>(priv_p);
 
-    JSString * msg;
-    JS_ConvertArguments(cx,
-        1, JS_ARGV(cx, vp), "S", &msg);
-
-    const char *code = JS_EncodeString(cx, msg);
+    JSString *thestr = JS_ValueToSource(cx, JS_ARGV(cx, vp)[0]);
+    const char *code = JS_EncodeString(cx, thestr);
     rust_str *message = rust_str::make(code);
 
     jsrust_log_message report =
