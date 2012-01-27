@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdint.h>
+#include <pthread.h>
 
 /*
  * Rust API declarations.
@@ -97,7 +98,12 @@ struct jsrust_context_priv {
     const type_desc *log_tydesc;
     rust_chan_pkg log_chan;
 
-    jsrust_context_priv() : error_tydesc(NULL), error_chan() {}
+    const type_desc *io_tydesc;
+    rust_chan_pkg io_chan;
+
+    JSObject *set_timeout_cbs;
+
+    jsrust_context_priv() : error_tydesc(NULL), error_chan(), log_tydesc(NULL), log_chan(), io_tydesc(NULL), io_chan(), set_timeout_cbs(NULL) {}
 };
 
 struct jsrust_error_report {
@@ -109,7 +115,13 @@ struct jsrust_error_report {
 
 struct jsrust_log_message {
     rust_str *message;
-    uintptr_t level;
+    uint32_t level;
+};
+
+struct jsrust_io_event {
+    uint32_t a1;
+    rust_str *a2;
+    uint32_t a3;
 };
 
 void port_finalize(JSContext *cx, JSObject *obj) {
@@ -197,6 +209,36 @@ extern "C" JSContext *JSRust_NewContext(JSRuntime *rt, size_t size) {
     return cx;
 }
 
+// stolen from js shell
+static JSBool JSRust_Print(JSContext *cx, uintN argc, jsval *vp) {
+    jsval *argv;
+    uintN i;
+    JSString *str;
+    char *bytes;
+
+    printf("%p ", pthread_self());
+
+    argv = JS_ARGV(cx, vp);
+    for (i = 0; i < argc; i++) {
+        str = JS_ValueToString(cx, argv[i]);
+        if (!str)
+            return JS_FALSE;
+        bytes = JS_EncodeString(cx, str);
+        if (!bytes)
+            return JS_FALSE;
+        printf("%s%s", i ? " " : "", bytes);
+        JS_free(cx, bytes);
+    }
+    printf("\n");
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    return JS_TRUE;
+}
+
+static JSFunctionSpec global_functions[] = {
+    JS_FN("print", JSRust_Print, 0, 0),
+    JS_FS_END
+};
+
 extern "C" JSBool JSRust_InitRustLibrary(JSContext *cx, JSObject *global) {
     JSObject *result = JS_InitClass(
         cx, global, NULL,
@@ -206,6 +248,8 @@ extern "C" JSBool JSRust_InitRustLibrary(JSContext *cx, JSObject *global) {
         NULL, // no properties
         port_functions, // no functions
         NULL, NULL);
+
+    JS_DefineFunctions(cx, global, global_functions);
 
     return !!result;
 }
@@ -225,17 +269,14 @@ extern "C" JSBool JSRust_SetErrorChannel(JSContext *cx,
     return JS_TRUE;
 }
 
-JSBool JSRustPostMessage(JSContext *cx, uintN argc, jsval *vp) {
+JSBool JSRust_PostMessage(JSContext *cx, uintN argc, jsval *vp) {
     void *priv_p = JS_GetContextPrivate(cx);
     assert(priv_p && "No private data associated with context!");
     jsrust_context_priv *priv =
         reinterpret_cast<jsrust_context_priv *>(priv_p);
 
-    JSString * msg;
-    JS_ConvertArguments(cx,
-        1, JS_ARGV(cx, vp), "S", &msg);
-
-    const char *code = JS_EncodeString(cx, msg);
+    JSString *thestr = JS_ValueToSource(cx, JS_ARGV(cx, vp)[0]);
+    const char *code = JS_EncodeString(cx, thestr);
     rust_str *message = rust_str::make(code);
 
     jsrust_log_message report =
@@ -248,8 +289,8 @@ JSBool JSRustPostMessage(JSContext *cx, uintN argc, jsval *vp) {
     return JS_TRUE;
 }
 
-static JSFunctionSpec print_functions[] = {
-    JS_FN("print", JSRustPostMessage, 0, 0),
+static JSFunctionSpec postMessage_functions[] = {
+    JS_FN("postMessage", JSRust_PostMessage, 0, 0),
     JS_FS_END
 };
 
@@ -265,8 +306,175 @@ extern "C" JSBool JSRust_SetLogChannel(JSContext *cx,
     priv->log_tydesc = tydesc;
     priv->log_chan = *channel;
 
-    JS_DefineFunctions(cx, global, print_functions);
+    JS_DefineFunctions(cx, global, postMessage_functions);
 
     return JS_TRUE;
+}
+
+extern "C" JSBool JSRust_Exit(int code) {
+    exit(code);
+}
+
+static uint32_t timeout_num = 0;
+
+enum IO_OP {
+    CONNECT,
+    SEND,
+    RECV,
+    CLOSE
+};
+
+JSBool JSRust_Connect(JSContext *cx, uintN argc, jsval *vp) {
+    void *priv_p = JS_GetContextPrivate(cx);
+    assert(priv_p && "No private data associated with context!");
+    jsrust_context_priv *priv =
+        reinterpret_cast<jsrust_context_priv *>(priv_p);
+
+    JSString * a2str;
+
+    JS_ConvertArguments(cx,
+        1, JS_ARGV(cx, vp), "S", &a2str);
+
+    rust_str *a2 = rust_str::make(
+        JS_EncodeString(cx, a2str));
+
+    uint32_t my_num = timeout_num++;
+
+    jsrust_io_event evt = { CONNECT, a2, my_num };
+
+    chan_id_send(priv->io_tydesc, priv->io_chan.task,
+                 priv->io_chan.port, &evt);
+
+    JS_SET_RVAL(cx, vp, INT_TO_JSVAL(my_num));
+    return JS_TRUE;
+}
+
+JSBool JSRust_Send(JSContext *cx, uintN argc, jsval *vp) {
+    void *priv_p = JS_GetContextPrivate(cx);
+    assert(priv_p && "No private data associated with context!");
+    jsrust_context_priv *priv =
+        reinterpret_cast<jsrust_context_priv *>(priv_p);
+
+    uint32_t req_id;
+    JSString *data;
+
+    JS_ConvertArguments(cx,
+        2, JS_ARGV(cx, vp), "uS", &req_id, &data);
+
+    rust_str *data_rust = rust_str::make(
+        JS_EncodeString(cx, data));
+
+    jsrust_io_event evt = { SEND, data_rust, req_id };
+
+    chan_id_send(priv->io_tydesc, priv->io_chan.task,
+                 priv->io_chan.port, &evt);
+
+    JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+
+JSBool JSRust_Recv(JSContext *cx, uintN argc, jsval *vp) {
+    void *priv_p = JS_GetContextPrivate(cx);
+    assert(priv_p && "No private data associated with context!");
+    jsrust_context_priv *priv =
+        reinterpret_cast<jsrust_context_priv *>(priv_p);
+
+    uint32_t req_id;
+    JSString *amount_str;
+
+    JS_ConvertArguments(cx,
+        2, JS_ARGV(cx, vp), "uS", &req_id, &amount_str);
+
+    rust_str *amount_rust = rust_str::make(
+        JS_EncodeString(cx, amount_str));
+
+    jsrust_io_event evt = { RECV, amount_rust, req_id };
+
+    chan_id_send(priv->io_tydesc, priv->io_chan.task,
+                 priv->io_chan.port, &evt);
+
+    JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+
+JSBool JSRust_Close(JSContext *cx, uintN argc, jsval *vp) {
+    void *priv_p = JS_GetContextPrivate(cx);
+    assert(priv_p && "No private data associated with context!");
+    jsrust_context_priv *priv =
+        reinterpret_cast<jsrust_context_priv *>(priv_p);
+
+    uint32_t req_id;
+
+    JS_ConvertArguments(cx,
+        1, JS_ARGV(cx, vp), "u", &req_id);
+
+    rust_str *nothing = rust_str::make("");
+
+    jsrust_io_event evt = { SEND, nothing, req_id };
+
+    chan_id_send(priv->io_tydesc, priv->io_chan.task,
+                 priv->io_chan.port, &evt);
+
+    JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+
+static JSFunctionSpec io_functions[] = {
+    JS_FN("jsrust_connect", JSRust_Connect, 1, 0),
+    JS_FN("jsrust_send", JSRust_Send, 2, 0),
+    JS_FN("jsrust_recv", JSRust_Recv, 2, 0),
+    JS_FN("jsrust_close", JSRust_Close, 1, 0),
+    JS_FS_END
+};
+
+extern "C" JSBool JSRust_SetIoChannel(JSContext *cx,
+                                         JSObject *global,
+                                         const rust_chan_pkg *channel,
+                                         const type_desc *tydesc) {
+    void *priv_p = JS_GetContextPrivate(cx);
+    assert(priv_p && "No private data associated with context!");
+    jsrust_context_priv *priv =
+        reinterpret_cast<jsrust_context_priv *>(priv_p);
+
+    priv->io_tydesc = tydesc;
+    priv->io_chan = *channel;
+
+    JS_DefineFunctions(cx, global, io_functions);
+    JS_DefineObject(cx, global, "_io_callbacks", NULL, NULL, 0);
+
+    return JS_TRUE;
+}
+
+extern "C" void JSRust_SetDataOnObject(JSContext *cx, JSObject *obj, const char * val, uint32_t vallen) {
+    JSString *valstr = JS_NewStringCopyN(cx, val, vallen);
+    jsval * jv = (jsval *)malloc(sizeof(jsval));
+    *jv = STRING_TO_JSVAL(valstr);
+    JS_SetProperty(cx, obj, "_data", jv);
+}
+
+static pthread_mutex_t get_runtime_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_key_t thread_runtime_key;
+static int initialized = 0;
+
+JSRuntime * jsrust_getthreadruntime(uint32_t max_bytes) {
+    JSRuntime *rt;
+    pthread_mutex_lock(&get_runtime_mutex);
+
+    if (!initialized) {
+        pthread_key_create(&thread_runtime_key, NULL);
+        initialized = 1;
+    }
+    pthread_mutex_unlock(&get_runtime_mutex);
+
+    rt = (JSRuntime *)pthread_getspecific(thread_runtime_key);
+    if (rt == NULL) {
+        rt = JS_NewRuntime(max_bytes);
+        pthread_setspecific(thread_runtime_key, (const void *)rt);
+    }
+    return rt;
+}
+
+extern "C" JSRuntime * JSRust_GetThreadRuntime(uint32_t max_bytes) {
+    return jsrust_getthreadruntime(max_bytes);
 }
 

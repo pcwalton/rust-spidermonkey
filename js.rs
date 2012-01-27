@@ -2,13 +2,14 @@
 
 use std;
 import comm::chan;
-import ctypes::{ size_t, void, c_uint };
+import ctypes::{ size_t, void, c_int, c_uint };
 import ptr::null;
 
-export new_runtime, new_context, set_options, set_version, new_class;
-export new_compartment_and_global_object, init_standard_classes, options;
+export new_runtime, get_thread_runtime, runtime, new_context, context, set_options, set_version, new_class;
+export new_compartment_and_global_object, object, init_standard_classes, options;
 export null_principals, compile_script, execute_script, value_to_source;
-export get_string_bytes, get_string, ext;
+export get_string_bytes, get_string, get_int, set_data_property, ext;
+export error_report, log_message, io_message;
 
 /* Structures. */
 type JSClass = {
@@ -54,24 +55,30 @@ type log_message = {
 	level: uint,
 };
 
+type io_message = {
+    a1: u32,
+    a2: str,
+    a3: u32
+};
+
 /* Opaque types. */
 type jsval = u64;
-tag jsid { jsid_priv(uint); }
-tag object { object_priv(*JSObject); }
-tag principals { principals_priv(*JSPrincipals); }
-tag script { script_priv(*JSScript); }
-tag string { string_priv(*JSString); }
+enum jsid { jsid_priv(uint) }
+enum object { object_priv(*JSObject) }
+enum principals { principals_priv(*JSPrincipals) }
+enum script { script_priv(*JSScript) }
+enum string { string_priv(*JSString) }
 
-tag JSClassInternal { JSClassInternal(@JSClassInternal); }
-tag JSCompartment   { JSCompartment(@JSCompartment);     }
-tag JSContext       { JSContext(@JSContext);             }
-tag JSObject        { JSObject(@JSObject);               }
-tag JSPrincipals    { JSPrincipals(@JSPrincipals);       }
-tag JSRuntime       { JSRuntime(@JSRuntime);             }
-tag JSScript        { JSScript(@JSScript);               }
-tag JSString        { JSString(@JSString);               }
-tag JSCrossCompartmentCall {
-    JSCrossCompartmentCall(@JSCrossCompartmentCall);
+enum JSClassInternal { JSClassInternal(@JSClassInternal) }
+enum JSCompartment   { JSCompartment(@JSCompartment)     }
+enum JSContext       { JSContext(@JSContext)             }
+enum JSObject        { JSObject(@JSObject)               }
+enum JSPrincipals    { JSPrincipals(@JSPrincipals)       }
+enum JSRuntime       { JSRuntime(@JSRuntime)             }
+enum JSScript        { JSScript(@JSScript)               }
+enum JSString        { JSString(@JSString)               }
+enum JSCrossCompartmentCall {
+    JSCrossCompartmentCall(@JSCrossCompartmentCall)
 }
 
 /* Types that shouldn't be opaque, but currently are due to limitations in
@@ -83,17 +90,17 @@ type JSResolveOp = u64;
 type JSConvertOp = u64;
 type JSFinalizeOp = u64;
 
-tag JSCheckAccessOp     { JSCheckAccessOp(@JSCheckAccessOp);       }
-tag JSEqualityOp        { JSEqualityOp(@JSEqualityOp);             }
-tag JSHasInstanceOp     { JSHasInstanceOp(@JSHasInstanceOp);       }
-tag JSNative            { JSNative(@JSNative);                     }
-tag JSNewEnumerateOp    { JSNewEnumerateOp(@JSNewEnumerateOp);     }
-tag JSNewResolveOp      { JSNewResolveOp(@JSNewResolveOp);         }
-tag JSStringFinalizeOp  { JSStringFinalizeOp(@JSStringFinalizeOp); }
-tag JSTraceOp           { JSTraceOp(@JSTraceOp);                   }
-tag JSTraceNamePrinter  { JSTraceNamePrinter(@JSTraceNamePrinter); }
-tag JSTypeOfOp          { JSTypeOfOp(@JSTypeOfOp);                 }
-tag JSXDRObjectOp       { JSXDRObjectOp(@JSXDRObjectOp);           }
+enum JSCheckAccessOp     { JSCheckAccessOp(@JSCheckAccessOp)       }
+enum JSEqualityOp        { JSEqualityOp(@JSEqualityOp)             }
+enum JSHasInstanceOp     { JSHasInstanceOp(@JSHasInstanceOp)       }
+enum JSNative            { JSNative(@JSNative)                     }
+enum JSNewEnumerateOp    { JSNewEnumerateOp(@JSNewEnumerateOp)     }
+enum JSNewResolveOp      { JSNewResolveOp(@JSNewResolveOp)         }
+enum JSStringFinalizeOp  { JSStringFinalizeOp(@JSStringFinalizeOp) }
+enum JSTraceOp           { JSTraceOp(@JSTraceOp)                   }
+enum JSTraceNamePrinter  { JSTraceNamePrinter(@JSTraceNamePrinter) }
+enum JSTypeOfOp          { JSTypeOfOp(@JSTypeOfOp)                 }
+enum JSXDRObjectOp       { JSXDRObjectOp(@JSXDRObjectOp)           }
 
 /* Non-opaque types. */
 type JSProtoKey = uint;
@@ -251,6 +258,7 @@ native mod js {
 
     /* TODO: Plenty more to add here. */
 
+    fn JS_ValueToInt32(cx : *JSContext, v : jsval, ip :*i32) -> bool;
 }
 
 #[link_args="-L."]
@@ -271,7 +279,13 @@ native mod jsrust {
 		-> bool;
 	fn JSRust_SetLogChannel(cx : *JSContext, object : *JSObject, chan : chan<log_message>)
 		-> bool;
+	fn JSRust_SetIoChannel(cx : *JSContext, object : *JSObject, chan : chan<io_message>)
+		-> bool;
 	fn JSRust_InitRustLibrary(cx : *JSContext, object : *JSObject) -> bool;
+        fn JSRust_SetDataOnObject(cx : *JSContext, object : *JSObject, val : str::sbuf, vallen: u32);
+
+        fn JSRust_GetThreadRuntime(maxbytes : u32) -> *JSRuntime;
+        fn JSRust_Exit(code : c_int);
 }
 
 resource runtime(rt : *JSRuntime) {
@@ -290,6 +304,10 @@ resource request(cx : *JSContext) {
 
 fn new_runtime(maxbytes : u32) -> runtime {
     ret runtime(js::JS_Init(maxbytes));
+}
+
+fn get_thread_runtime(maxbytes : u32) -> runtime {
+    ret runtime(jsrust::JSRust_GetThreadRuntime(maxbytes));
 }
 
 fn shut_down() {
@@ -318,9 +336,9 @@ fn set_version(cx : context, version : JSVersion) {
 
 /* Objects */
 
-fn new_compartment_and_global_object(cx : context, class : @class,
+fn new_compartment_and_global_object(cx : context, clas : @class,
                                      principals : principals) -> object {
-    let jsclass = ptr::addr_of(class.jsclass);
+    let jsclass = ptr::addr_of(clas.jsclass);
     let jsobj = js::JS_NewCompartmentAndGlobalObject(*cx, jsclass,
                                                      *principals);
     if jsobj == null() { fail; }
@@ -440,7 +458,7 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
         fail;
     }
 
-    let buf = vec::init_elt(0u8, (len as uint) + 1u);
+    let buf = vec::init_elt(0u, ((len as u8) + 1u8));
     if !js::JS_EncodeCharacters(*cx, vec::to_ptr(bytes),
                                 (vec::len(bytes) / 2u) as size_t,
                                 vec::to_ptr(buf), ptr::addr_of(len)) {
@@ -448,6 +466,18 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
     }
 
     ret str::unsafe_from_bytes(buf);
+}
+
+fn get_int(cx : context, num : jsval) -> i32 unsafe {
+    let oparam : i32 = 0i32;
+    js::JS_ValueToInt32(*cx, num, ptr::addr_of(oparam));
+    ret oparam;
+}
+
+fn set_data_property(cx : context, obj : object, value : str) {
+    ret str::as_buf(value) {|buf|
+        jsrust::JSRust_SetDataOnObject(*cx, *obj, buf, str::byte_len(value) as u32);
+    }
 }
 
 /** Rust extensions to the JavaScript language bindings. */
@@ -460,8 +490,16 @@ mod ext {
 		if !jsrust::JSRust_SetLogChannel(*cx, *object, chan) { fail; }
 	}
 
+	fn set_io_channel(cx : context, object : object, chan : chan<io_message>) {
+		if !jsrust::JSRust_SetIoChannel(*cx, *object, chan) { fail; }
+	}
+
 	fn init_rust_library(cx : context, object : object) {
 		if !jsrust::JSRust_InitRustLibrary(*cx, *object) { fail; }
+	}
+
+	fn rust_exit_now(code : int) {
+		jsrust::JSRust_Exit(code as c_int);
 	}
 }
 
