@@ -6,7 +6,7 @@ import comm::{ port, chan, recv, send };
 
 use std;
 
-import std::{ io, treemap, uvtmp };
+import std::{ io, os, treemap, uvtmp };
 
 enum child_message {
     set_log(chan<js::log_message>),
@@ -18,8 +18,9 @@ enum child_message {
     stderr(str),
     spawn(str, str),
     cast(str, str),
+    load_url(str),
     exitproc,
-    done
+    done,
 }
 
 enum ioop {
@@ -35,7 +36,7 @@ enum ioop {
     op_exit = 9
 }
 
-fn populate_global_scope(cx : js::context, global : js::object) {
+fn populate_global_scope(cx : js::context, global : js::object, script : str) {
     alt std::io::read_whole_file("xmlhttprequest.js") {
         result::ok(file) {
             let script = js::compile_script(
@@ -52,13 +53,17 @@ fn populate_global_scope(cx : js::context, global : js::object) {
         }
         _ { fail }
     }
-    alt std::io::read_whole_file_str("test.js") {
+
+    alt std::io::read_whole_file_str(script) {
         result::ok(file) {
             let script = js::compile_script(
-                cx, global, str::bytes(#fmt("try { %s } catch (e) { print('Error: ', e, e.stack) }", file)), "test.js", 0u);
+                cx, global, str::bytes(#fmt("try { %s } catch (e) { print('Error: ', e, e.stack) }", file)), script, 0u);
             js::execute_script(cx, global, script);
         }
-        _ { fail }
+        _ {
+            log(core::error, #fmt("File not found: %s", script));
+            js::ext::rust_exit_now(0);
+        }
     }
 }
 
@@ -117,12 +122,13 @@ fn make_children(msg_chan : chan<child_message>, senduv_chan: chan<chan<uvtmp::i
     };
 }
 
-fn make_actor(myid : int, thread : uvtmp::thread, maxbytes : u32, out : chan<child_message>, sendchan : chan<(int, chan<child_message>)>) {
+fn make_actor(myid : int, myurl : str, thread : uvtmp::thread, maxbytes : u32, out : chan<child_message>, sendchan : chan<(int, chan<child_message>)>) {
 
     task::spawn {||
         let rt = js::get_thread_runtime(maxbytes);
         let msg_port = port::<child_message>();
-        send(sendchan, (myid, chan(msg_port)));
+        let msg_chan = chan(msg_port);
+        send(sendchan, (myid, msg_chan));
         let senduv_port = port::<chan<uvtmp::iomsg>>();
         make_children(chan(msg_port), chan(senduv_port));
         let uv_chan = recv(senduv_port);
@@ -149,6 +155,12 @@ fn make_actor(myid : int, thread : uvtmp::thread, maxbytes : u32, out : chan<chi
                     js::ext::set_log_channel(
                         cx, global, ch);
                     setup += 1;
+                }
+                load_url(x) {
+                    js::set_data_property(cx, global, x);
+                    let code = "_resume(5, _data, 0); _data = undefined";
+                    let script = js::compile_script(cx, global, str::bytes(code), "io", 0u);
+                    js::execute_script(cx, global, script);
                 }
                 log_msg(m) {                
                     // messages from javascript
@@ -212,9 +224,14 @@ fn make_actor(myid : int, thread : uvtmp::thread, maxbytes : u32, out : chan<chi
             }
             if setup == 1 {
                 setup = 2;
-                populate_global_scope(cx, global);
+                if str::byte_len(myurl) > 4u && str::eq(str::slice(myurl, 0u, 4u), "http") {
+                    populate_global_scope(cx, global, "");
+                    send(msg_chan, load_url(myurl));
+                } else {
+                    populate_global_scope(cx, global, myurl);
+                }
                 let checkwait = js::compile_script(
-                    cx, global, str::bytes("if (XMLHttpRequest.requests_outstanding === 0) jsrust_exit();"), "test.js", 0u);
+                    cx, global, str::bytes("if (XMLHttpRequest.requests_outstanding === 0)  jsrust_exit();"), "test.js", 0u);
                 js::execute_script(cx, global, checkwait);
             }
         }
@@ -222,7 +239,7 @@ fn make_actor(myid : int, thread : uvtmp::thread, maxbytes : u32, out : chan<chi
 }
 
 
-fn main() {
+fn main(args : [str]) {
     let maxbytes = 8u32 * 1024u32 * 1024u32;
     let thread = uvtmp::create_thread();
     uvtmp::start_thread(thread);
@@ -235,16 +252,26 @@ fn main() {
 
     let map = treemap::init();
 
-    for x in [1, 2] {
-        make_actor(x, thread, maxbytes, stdoutchan, sendchanchan);
+    let argc = vec::len(args);
+    let argv = if argc == 1u {
+        ["test.js"]
+    } else {
+        vec::slice(args, 1u, argc)
+    };
+
+    let left = 0;
+
+    for x in argv {
+        left += 1;
+        make_actor(left, x, thread, maxbytes, stdoutchan, sendchanchan);
     }
-    for _ in [1, 2] {
+    let actorid = left;
+
+    for _x in argv {
         let (theid, thechan) = recv(sendchanport);
         treemap::insert(map, theid, thechan);
     }
 
-    let left = 2;
-    let actorid = left;
     while true {
         alt recv(stdoutport) {
             stdout(x) { log(core::error, x); }
@@ -254,7 +281,7 @@ fn main() {
                 actorid = actorid + 1;
                 left = left + 1;
                 task::spawn {||
-                    make_actor(actorid, thread, maxbytes, stdoutchan, sendchanchan);
+                    make_actor(actorid, src, thread, maxbytes, stdoutchan, sendchanchan);
                 };
             }
             cast(id, msg) {}

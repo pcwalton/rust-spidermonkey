@@ -40,6 +40,7 @@ var SEND = 1;
 var RECV = 2;
 var CLOSE = 3;
 var TIME = 4;
+var URL = 5;
 
 function XMLHttpRequest() {
     this.readyState = 0;
@@ -131,6 +132,7 @@ XMLHttpRequest.prototype = {
 
 global._resume = function _resume(what, data, req_id) {
     //print("Handling request. Total:", XMLHttpRequest.requests_outstanding);
+    //print("_resume", what, data, req_id);
     var xhr = _xhrs[req_id]
     if (what === CONN) {
         xhr.readyState = XMLHttpRequest.prototype.OPENED;
@@ -206,6 +208,9 @@ global._resume = function _resume(what, data, req_id) {
         timeouts[req_id] = undefined;
         // piggyback on this
         XMLHttpRequest.requests_outstanding--;
+    } else if (what === URL) {
+        print("LOAD URL", data);
+        window.location = data;
     } else if (what === CLOSE) {
         this._fd = undefined;
         XMLHttpRequest.requests_outstanding--;
