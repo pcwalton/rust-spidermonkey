@@ -2,7 +2,7 @@
 
 use std;
 import comm::chan;
-import ctypes::{ size_t, void, c_uint };
+import ctypes::{ size_t, void, c_int, c_uint };
 import ptr::null;
 
 export new_runtime, get_thread_runtime, runtime, new_context, context, set_options, set_version, new_class;
@@ -285,6 +285,7 @@ native mod jsrust {
         fn JSRust_SetDataOnObject(cx : *JSContext, object : *JSObject, val : str::sbuf, vallen: u32);
 
         fn JSRust_GetThreadRuntime(maxbytes : u32) -> *JSRuntime;
+        fn JSRust_Exit(code : c_int);
 }
 
 resource runtime(rt : *JSRuntime) {
@@ -495,6 +496,10 @@ mod ext {
 
 	fn init_rust_library(cx : context, object : object) {
 		if !jsrust::JSRust_InitRustLibrary(*cx, *object) { fail; }
+	}
+
+	fn rust_exit_now(code : int) {
+		jsrust::JSRust_Exit(code as c_int);
 	}
 }
 

@@ -314,6 +314,9 @@ extern "C" JSBool JSRust_SetLogChannel(JSContext *cx,
     return JS_TRUE;
 }
 
+extern "C" JSBool JSRust_Exit(int code) {
+    exit(code);
+}
 
 static uint32_t timeout_num = 0;
 

@@ -263,7 +263,6 @@ fn main() {
             stderr(x) { log(core::error, x); }
             exitproc {
                 left = left - 1;
-                log(core::error, #fmt("LEFT: %d", left));
                 if left == 0 {
                     break;
                 }
@@ -274,7 +273,7 @@ fn main() {
     uvtmp::join_thread(thread);
     uvtmp::delete_thread(thread);
 
-    log(core::error, "Done.");
+    js::ext::rust_exit_now(0);
     /*let result_src = js::value_to_source(cx, result);
     #error["Result: %s", js::get_string(cx, result_src)];*/
 }
