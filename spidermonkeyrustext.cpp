@@ -117,6 +117,7 @@ struct jsrust_log_message {
     rust_str *message;
     uint32_t level;
     uint32_t tag;
+    uint32_t timeout;
 };
 
 
@@ -308,7 +309,7 @@ enum IO_OP {
     EXIT
 };
 
-uint32_t jsrust_send_msg(JSContext *cx, enum IO_OP op, rust_str *data, uint32_t req_id) {
+uint32_t jsrust_send_msg(JSContext *cx, enum IO_OP op, rust_str *data, uint32_t req_id, uint32_t timeout) {
     void *priv_p = JS_GetContextPrivate(cx);
     assert(priv_p && "No private data associated with context!");
     jsrust_context_priv *priv =
@@ -319,7 +320,7 @@ uint32_t jsrust_send_msg(JSContext *cx, enum IO_OP op, rust_str *data, uint32_t 
         my_num = io_op_num++;
     }
 
-    jsrust_log_message evt = { data, op, my_num };
+    jsrust_log_message evt = { data, op, my_num, timeout };
 
     chan_id_send(priv->log_tydesc, priv->log_chan.task,
                  priv->log_chan.port, &evt);
@@ -336,7 +337,7 @@ JSBool JSRust_Connect(JSContext *cx, uintN argc, jsval *vp) {
     rust_str *a2 = rust_str::make(
         JS_EncodeString(cx, a2str));
 
-    uint32_t my_num = jsrust_send_msg(cx, CONNECT, a2, 0);
+    uint32_t my_num = jsrust_send_msg(cx, CONNECT, a2, 0, 0);
 
     JS_SET_RVAL(cx, vp, INT_TO_JSVAL(my_num));
     return JS_TRUE;
@@ -352,7 +353,7 @@ JSBool JSRust_Send(JSContext *cx, uintN argc, jsval *vp) {
     rust_str *data_rust = rust_str::make(
         JS_EncodeString(cx, data));
 
-    jsrust_send_msg(cx, SEND, data_rust, req_id);
+    jsrust_send_msg(cx, SEND, data_rust, req_id, 0);
 
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     return JS_TRUE;
@@ -369,9 +370,23 @@ JSBool JSRust_Recv(JSContext *cx, uintN argc, jsval *vp) {
         JS_EncodeString(cx, amount_str));
 
 
-    jsrust_send_msg(cx, RECV, amount_rust, req_id);
+    jsrust_send_msg(cx, RECV, amount_rust, req_id, 0);
 
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    return JS_TRUE;
+}
+
+JSBool JSRust_Timeout(JSContext *cx, uintN argc, jsval *vp) {
+    uint32_t timeout;
+
+    JS_ConvertArguments(cx,
+        1, JS_ARGV(cx, vp), "u", &timeout);
+
+    rust_str *nothing = rust_str::make("");
+
+    int32_t my_num = jsrust_send_msg(cx, TIME, nothing, 0, timeout);
+
+    JS_SET_RVAL(cx, vp, INT_TO_JSVAL(my_num));
     return JS_TRUE;
 }
 
@@ -383,7 +398,7 @@ JSBool JSRust_Close(JSContext *cx, uintN argc, jsval *vp) {
 
     rust_str *nothing = rust_str::make("");
 
-    jsrust_send_msg(cx, CLOSE, nothing, req_id);
+    jsrust_send_msg(cx, CLOSE, nothing, req_id, 0);
 
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     return JS_TRUE;
@@ -394,7 +409,7 @@ JSBool JSRust_Exit(JSContext *cx, uintN argc, jsval *vp) {
 
     rust_str *nothing = rust_str::make("");
 
-    jsrust_send_msg(cx, EXIT, nothing, 0);
+    jsrust_send_msg(cx, EXIT, nothing, 0, 0);
 
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     return JS_TRUE;
@@ -405,6 +420,7 @@ static JSFunctionSpec io_functions[] = {
     JS_FN("jsrust_send", JSRust_Send, 2, 0),
     JS_FN("jsrust_recv", JSRust_Recv, 2, 0),
     JS_FN("jsrust_close", JSRust_Close, 1, 0),
+    JS_FN("jsrust_timeout", JSRust_Timeout, 2, 0),
     JS_FN("jsrust_exit", JSRust_Exit, 0, 0),
     JS_FS_END
 };

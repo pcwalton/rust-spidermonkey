@@ -53,7 +53,8 @@ type error_report = {
 type log_message = {
 	message: str,
 	level: u32,
-        tag: u32
+        tag: u32,
+        timeout: u32
 };
 
 

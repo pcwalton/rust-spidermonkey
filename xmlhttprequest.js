@@ -130,7 +130,7 @@ XMLHttpRequest.prototype = {
 }
 
 global._resume = function _resume(what, data, req_id) {
-    print("Handling request. Total:", XMLHttpRequest.requests_outstanding);
+    //print("Handling request. Total:", XMLHttpRequest.requests_outstanding);
     var xhr = _xhrs[req_id]
     if (what === CONN) {
         xhr.readyState = XMLHttpRequest.prototype.OPENED;
@@ -201,6 +201,11 @@ global._resume = function _resume(what, data, req_id) {
             xhr.readyState = XMLHttpRequest.prototype.LOADING;
             xhr.onreadystatechange.apply(xhr);
         }
+    } else if (what === TIME) {
+        timeouts[req_id][0].apply(global, timeouts[req_id][1]);
+        timeouts[req_id] = undefined;
+        // piggyback on this
+        XMLHttpRequest.requests_outstanding--;
     } else if (what === CLOSE) {
         this._fd = undefined;
         XMLHttpRequest.requests_outstanding--;
@@ -208,6 +213,19 @@ global._resume = function _resume(what, data, req_id) {
     if (XMLHttpRequest.requests_outstanding === 0) {
         postMessage(9, "exitproc");
     }
+}
+
+var timeouts = {};
+
+global.setTimeout = function(func, time) {
+    var args = [];
+    for (var i = 0; i < arguments.length; i++) {
+        args.push(arguments[i]);
+    }
+    var timeoutnum = jsrust_timeout(time);
+    timeouts[timeoutnum] = [func, args];
+    // piggyback on this
+    XMLHttpRequest.requests_outstanding++;
 }
 
 return XMLHttpRequest;

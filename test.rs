@@ -92,7 +92,7 @@ fn make_children(msg_chan : chan<child_message>, senduv_chan: chan<chan<uvtmp::i
                 }
                 uvtmp::read(cd, buf, len) {
                     if len == -1 {
-                        send(msg_chan, io_cb(3u32, "", uvtmp::get_req_id(cd)));
+                        send(msg_chan, io_cb(3u32, "onclose", uvtmp::get_req_id(cd)));
                     } else {
                         unsafe {
                             let vecbuf = vec::unsafe::from_buf(buf, len as uint);
@@ -102,7 +102,13 @@ fn make_children(msg_chan : chan<child_message>, senduv_chan: chan<chan<uvtmp::i
                         }
                     }
                 }
+                uvtmp::timer(req_id) {
+                    send(msg_chan, io_cb(4u32, "ontimer", req_id));
+                }
                 uvtmp::whatever {
+                
+                }
+                uvtmp::exit {
                     send(msg_chan, done);
                     break;
                 }
@@ -183,8 +189,7 @@ fn make_actor(myid : int, thread : uvtmp::thread, maxbytes : u32, out : chan<chi
                             uvtmp::close_connection(thread, m.tag);
                         }
                         8u32 { // SETTIMEOUT
-                            //log(core::error, "settimeout");
-
+                            uvtmp::timer_start(thread, m.timeout, m.tag, uv_chan);
                         }
                         _ {
                             log(core::error, "...");
@@ -198,7 +203,7 @@ fn make_actor(myid : int, thread : uvtmp::thread, maxbytes : u32, out : chan<chi
                     js::execute_script(cx, global, script);
                 }
                 exitproc {
-                    send(uv_chan, uvtmp::whatever);
+                    send(uv_chan, uvtmp::exit);
                 }
                 done {
                     exit = true;
