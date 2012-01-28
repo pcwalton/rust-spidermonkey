@@ -37,6 +37,7 @@ enum ioop {
 }
 
 fn populate_global_scope(cx : js::context, global : js::object, script : str) {
+    js::begin_request(*cx);
     alt std::io::read_whole_file("xmlhttprequest.js") {
         result::ok(file) {
             let script = js::compile_script(
@@ -65,6 +66,7 @@ fn populate_global_scope(cx : js::context, global : js::object, script : str) {
             js::ext::rust_exit_now(0);
         }
     }
+    js::end_request(*cx);
 }
 
 fn make_children(msg_chan : chan<child_message>, senduv_chan: chan<chan<uvtmp::iomsg>>) {
@@ -133,7 +135,7 @@ fn make_actor(myid : int, myurl : str, thread : uvtmp::thread, maxbytes : u32, o
         make_children(chan(msg_port), chan(senduv_port));
         let uv_chan = recv(senduv_port);
 
-        let cx = js::new_context(rt, 8192 as size_t);
+        let cx = js::new_context(rt, maxbytes as size_t);
         js::set_options(cx, js::options::varobjfix | js::options::methodjit);
         js::set_version(cx, 185u);
 
@@ -157,10 +159,12 @@ fn make_actor(myid : int, myurl : str, thread : uvtmp::thread, maxbytes : u32, o
                     setup += 1;
                 }
                 load_url(x) {
+                    js::begin_request(*cx);
                     js::set_data_property(cx, global, x);
                     let code = "_resume(5, _data, 0); _data = undefined";
                     let script = js::compile_script(cx, global, str::bytes(code), "io", 0u);
                     js::execute_script(cx, global, script);
+                    js::end_request(*cx);
                 }
                 log_msg(m) {                
                     // messages from javascript
@@ -209,10 +213,12 @@ fn make_actor(myid : int, myurl : str, thread : uvtmp::thread, maxbytes : u32, o
                     }
                 }
                 io_cb(a1, a2, a3) {
+                    js::begin_request(*cx);
                     js::set_data_property(cx, global, a2);
                     let code = #fmt("_resume(%u, _data, %u); _data = undefined; XMLHttpRequest.requests_outstanding", a1 as uint, a3 as uint);
                     let script = js::compile_script(cx, global, str::bytes(code), "io", 0u);
                     js::execute_script(cx, global, script);
+                    js::end_request(*cx);
                 }
                 exitproc {
                     send(uv_chan, uvtmp::exit);
