@@ -103,7 +103,7 @@ fn make_children(msg_chan : chan<child_message>, senduv_chan: chan<chan<uvtmp::i
                     } else {
                         unsafe {
                             let vecbuf = vec::unsafe::from_buf(buf, len as uint);
-                            let bufstr = str::unsafe_from_bytes(vecbuf);
+                            let bufstr = str::from_bytes(vecbuf);
                             send(msg_chan, io_cb(2u32, bufstr, uvtmp::get_req_id(cd)));
                             uvtmp::delete_buf(buf);
                         }
@@ -227,6 +227,7 @@ fn make_actor(myid : int, myurl : str, thread : uvtmp::thread, maxbytes : u32, o
                     exit = true;
                     send(out, done);
                 }
+                _ { fail "unexpected case" }
             }
             if setup == 1 {
                 setup = 2;
@@ -309,6 +310,7 @@ fn main(args : [str]) {
                     break;
                 }
             }
+            _ { fail "unexpected case" }
         }
     }
     // temp hack: join never returns right now

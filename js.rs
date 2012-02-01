@@ -471,7 +471,7 @@ fn get_string(cx : context, jsstr : string) -> str unsafe {
         fail;
     }
 
-    ret str::unsafe_from_bytes(buf);
+    ret str::from_bytes(buf);
 }
 
 fn get_int(cx : context, num : jsval) -> i32 unsafe {
