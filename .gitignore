@@ -1,0 +1,4 @@
+*.dylib*
+test*
+.DS_Store
+
